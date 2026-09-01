@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>amr_description</name>
+  <version>2.2.6</version>
+  <description>
+    3D models of amr for simulation and visualization
+  </description>
+  <license>Apache 2.0</license>
+  <author email="phattphatt2811@gmail.com">Hoang Cong Phat</author>
+  <maintainer email="phattphatt2811@gmail.com">Hoang Cong Phat</maintainer>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>urdf</depend>
+  <depend>xacro</depend>
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
+
