@@ -1,0 +1,14 @@
+app_controller_node:
+  ros__parameters:
+    serial_port: "/dev/ttyACM0"
+
+    wheel_radius: 0.0485
+    wheel_base_x: 0.25
+    wheel_base_y: 0.25
+
+    max_wheel_speed_mps: 2.0
+    cmd_vel_timeout: 0.5
+
+    longitudinal_gain: -1.0
+    lateral_gain: 1.0
+    angular_gain: -1.0
