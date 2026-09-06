@@ -14,7 +14,14 @@ from launch.actions import (
 
 def launch_setup(context, *args, **kwargs):
 
-    use_sim_time = LaunchConfiguration('use_sim_time', default='false')
+    use_sim_time_str = LaunchConfiguration('use_sim_time').perform(context).strip().lower()
+
+    use_sim_time = use_sim_time_str in ('true', '1')
+
+    if not use_sim_time:
+        urdf_path = '/var/amr/config/amr_1lidar.urdf'
+    else:
+
 
     urdf_file_name = LaunchConfiguration('urdf_file_name', default='amr.urdf')
 
