@@ -81,6 +81,7 @@ def generate_launch_description():
     use_jsp = LaunchConfiguration('use_jsp')
     use_rviz = LaunchConfiguration('use_rviz')
     use_sim_time = LaunchConfiguration('use_sim_time')
+    use_gazebo = LaunchConfiguration('use_gazebo')
 
     declare_rviz_config_file_cmd = DeclareLaunchArgument(
         name='rviz_config_file',

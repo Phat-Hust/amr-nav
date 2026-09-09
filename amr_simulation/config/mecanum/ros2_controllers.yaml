@@ -3,6 +3,7 @@
 controller_manager:
  ros__parameters:
    update_rate: 50  # Hz
+   switch_timeout: 30.0
 
    # Declare the controllers
    joint_state_broadcaster:

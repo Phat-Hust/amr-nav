@@ -1,0 +1,6 @@
+amr_loc_node:
+  ros__parameters:
+    use_sim_time: True
+    configuration_directory: ''
+    configuration_basename: ''
+    load_state_filename: ''

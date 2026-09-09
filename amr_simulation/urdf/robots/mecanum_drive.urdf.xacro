@@ -12,6 +12,7 @@
     <xacro:include filename="$(find amr_simulation)/urdf/mech/mecanum_wheel.urdf.xacro"/>
     <xacro:include filename="$(find amr_simulation)/urdf/sensors/rgbd_camera.urdf.xacro"/>
     <xacro:include filename="$(find amr_simulation)/urdf/sensors/lidar.urdf.xacro"/>
+    <!-- <xacro:include filename="$(find amr_simulation)/urdf/sensors/imu.urdf.xacro"> -->
     <!-- Note: imu.urdf.xacro was removed because it is missing from the sensors/ directory -->
 
     <!-- Instantiate base (check if macro inside mecanum_base.urdf.xacro is named mecanum_base or rosmaster_x3_base) -->
