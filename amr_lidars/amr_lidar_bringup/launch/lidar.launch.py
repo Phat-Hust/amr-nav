@@ -15,7 +15,7 @@ def generate_launch_description():
     # Example:
     #   export AMR_LIDAR_MODEL=a2m8
     # ---------------------------------------------------------
-    lidar_model = os.getenv("AMR_LIDAR_MODEL", "a2m8")
+    lidar_model = os.getenv("LIDAR_TYPE", "a2m8")
     lidar_model = lidar_model.strip().lower()
 
     # ---------------------------------------------------------

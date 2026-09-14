@@ -75,7 +75,7 @@ def generate_launch_description():
 	                          'run_gazebo_client':run_gazebo_client}.items(),
 	      ),
 	      IncludeLaunchDescription(
-	        PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('amr_description'), 'launch', 'robot_state_publisher.launch.py')),
+	        PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('amr_simulation'), 'launch', 'robot_state_publisher.launch.py')),
 	        launch_arguments={'use_sim_time': 'false',
 	                          'urdf_file_name': os.path.join(CONFIG_FOLDER, 'amr_' + NUMBER_OF_SCANS + 'lidar.urdf')}.items()
 	      ),
