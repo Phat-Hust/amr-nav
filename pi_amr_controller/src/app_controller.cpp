@@ -1032,6 +1032,10 @@ bool AppController::read_hardware_velocities(
         serial_rx_buffer_[9]
       );
 
+    const uint8_t kp1 = decode_int8(serial_rx_buffer_[10]);
+    const uint8_t ki1 = decode_int8(serial_rx_buffer_[11]);
+    
+
     /*
       STM32 gửi tốc độ dài m/s.
       Odometry cần tốc độ góc rad/s.
