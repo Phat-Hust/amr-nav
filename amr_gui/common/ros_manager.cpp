@@ -21,6 +21,12 @@ void RosManager::init(int argc, char *argv[]) {
 
     m_pidPub = m_node->create_publisher<amr_common::msg::WheelTelemetry>(
         amr::TOPIC_SET_PID.toStdString(), 10);
+
+//    m_emerBtn = m_node->create_subscription<std_msgs::msg::Int16>(
+//        amr::TOPIC_EMERGENCY_BUTTON.toStdString(), 10,
+//                [this](const std_msgs::msg::Int16::SharedPtr msg) {
+//            emit EmegencyUpdated(msg);
+//    });
 }
 
 void RosManager::spinSome() {

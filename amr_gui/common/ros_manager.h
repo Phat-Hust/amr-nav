@@ -27,4 +27,5 @@ private:
     std::shared_ptr<rclcpp::Node> m_node;
     rclcpp::Subscription<amr_common::msg::WheelTelemetry>::SharedPtr m_telemetrySub;
     rclcpp::Publisher<amr_common::msg::WheelTelemetry>::SharedPtr m_pidPub;
+//    rclcpp::Subscription<std_msgs::msg::Int16>::SharedPtr m_emerBtn;
 };

@@ -7,6 +7,7 @@ namespace amr {
 
     const QString TOPIC_WHEEL_TELEMETRY = "/wheel_telemetry";
     const QString TOPIC_SET_PID         = "/set_wheel_pid";
+    const QString TOPIC_EMERGENCY_BUTTON = "/emergency_btn";
 
     enum WheelIndex {
         FRONT_LEFT  = 0,

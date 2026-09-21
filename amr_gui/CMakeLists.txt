@@ -8,6 +8,7 @@ set(CMAKE_AUTORCC ON)
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(amr_common REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(Qt6 REQUIRED COMPONENTS Quick Core Gui)
 
 qt_add_resources(RESOURCES_RCC qml.qrc)
@@ -21,6 +22,8 @@ add_executable(amr_gui
     controller/pid_controller.h
     model/wheel_data_model.cpp
     model/wheel_data_model.h
+    controller/button_controller.cpp
+    controller/button_controller.h
     ${RESOURCES_RCC}
 )
 

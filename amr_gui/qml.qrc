@@ -5,8 +5,9 @@
         <file>qml/Header.qml</file>
         <file>qml/main.qml</file>
         <file>qml/common/qmldir</file>
-        <file>qml/components/PidTuner.qml</file>
         <file>qml/components/WheelPlot.qml</file>
         <file>qml/components/CustomButton.qml</file>
+        <file>qml/body/Map.qml</file>
+        <file>qml/body/PidTuner.qml</file>
     </qresource>
 </RCC>

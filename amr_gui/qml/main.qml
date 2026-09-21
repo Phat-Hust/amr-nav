@@ -3,6 +3,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "common"
 import "components"
+import "body"
 
 
 ApplicationWindow {
@@ -11,7 +12,10 @@ ApplicationWindow {
     width: 1280
     height: 800
     title: "AMR Mission & Tuning Dashboard"
-    color: AppColors.backgroundDark
+    color: AppColors.antiqueWhite
+
+    property int currentPage: 0
+    readonly property var pageTitles: ["Map View", "PID Debug View"]
 
     ColumnLayout {
         anchors.fill: parent
@@ -19,48 +23,28 @@ ApplicationWindow {
 
         Header {
             Layout.fillWidth: true
-            color: AppColors.backgroundLight
+            color: AppColors.deepSkyBlue
+            tilteText: "AUTONOMOUS MOBILE ROBOT 01"
+            textColor: AppColors.white
+            activePage: appWindow.currentPage
+            onPageSelected: (index) => {
+                appWindow.currentPage = index;
+            }
         }
 
-        GridLayout {
+        StackLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            columns: 2
-            rows: 2
+            currentIndex: appWindow.currentPage
 
-            WheelPlot {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                wheelName: "Front Left (Wheel 0)"
-                model: PidCtrl.wheelFL
-                onApplyPid: (p, i, d) => PidCtrl.updateGains(0, p, i, d)
-            }
-            WheelPlot {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                wheelName: "Front Right (Wheel 1)"
-                model: PidCtrl.wheelFR
-                onApplyPid: (p, i, d) => PidCtrl.updateGains(1, p, i, d)
-            }
-            WheelPlot {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                wheelName: "Rear Left (Wheel 2)"
-                model: PidCtrl.wheelRL
-                onApplyPid: (p, i, d) => PidCtrl.updateGains(2, p, i, d)
-            }
-            WheelPlot {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                wheelName: "Rear Right (Wheel 3)"
-                model: PidCtrl.wheelRR
-                onApplyPid: (p, i, d) => PidCtrl.updateGains(3, p, i, d)
-            }
+            Map {}
+            PidTuner {}
         }
 
         Footer {
             Layout.fillWidth: true
-            color: AppColors.backgroundLight
+            color: AppColors.deepSkyBlue
+            currentPageName: appWindow.pageTitles[appWindow.currentPage]
         }
     }
 }

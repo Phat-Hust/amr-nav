@@ -11,19 +11,19 @@ Rectangle {
     border.color: AppColors.borderDark
     border.width: 1
 
+    property string currentPageName: "Map"
+
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: 16
         anchors.rightMargin: 16
         spacing: 12
 
-        // Status Indicator
         Text {
-            text: "ROS Status: Connected"
+            text: "Active Page: " + footerRoot.currentPageName
             color: AppColors.primaryCyan
             font.bold: true
             font.pixelSize: 13
-            Layout.alignment: Qt.AlignVCenter
         }
 
         // Spacer pushes buttons to the right

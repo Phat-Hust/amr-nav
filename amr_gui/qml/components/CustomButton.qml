@@ -8,7 +8,7 @@ Button {
 
     // Custom API properties
     property color baseColor: AppColors.buttonNormal
-    property color hoverColor: AppColors.buttonHovered
+    property color hoverColor: AppColors.green
     property color pressColor: AppColors.buttonPressed
     property color textColor: AppColors.textWhite
     property string iconSource: ""
