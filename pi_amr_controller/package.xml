@@ -3,20 +3,23 @@
 <package format="3">
   <name>pi_amr_controller</name>
   <version>0.0.0</version>
-  <description>ROS 2 controller package for the PI mecanum AMR.</description>
-  <maintainer email="votuandat3333@gmail.com">tiv</maintainer>
-  <license>Apache-2.0</license>
+  <description>TODO: Package description</description>
+  <maintainer email="phattphatt2811@gmail.com">develop</maintainer>
+  <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <depend>rclcpp</depend>
-  <depend>geometry_msgs</depend>
-  <depend>nav_msgs</depend>
-  <depend>tf2</depend>
-  <depend>ament_index_cpp</depend>
-  <depend>tf2_ros</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
+
+
+  <depend>std_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>rclcpp</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>amr_common</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

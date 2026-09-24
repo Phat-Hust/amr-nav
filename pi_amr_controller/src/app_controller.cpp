@@ -1,1334 +1,300 @@
-#include "pi_amr_controller/app_controller.hpp"   // vif header hiện tại nằm tại include/pi_amr_controller/app_controller.hpp
+#include "app_controller.hpp"
 
-#include <algorithm>
-#include <array>
-#include <cerrno>
-#include <chrono>
-#include <cmath>
-#include <cstring>
-#include <functional>
-#include <limits>
-
-// Linux serial
-#include <fcntl.h>
-#include <termios.h>
-#include <unistd.h>
-
-// ROS2 TF
-#include "geometry_msgs/msg/transform_stamped.hpp"
-#include "tf2/LinearMath/Quaternion.h"
-
-using namespace std::chrono_literals;
-
-
-/* =========================================================
- * Constructor
- * ========================================================= */
-AppController::AppController(
-  const rclcpp::NodeOptions & options
-)
-: Node("app_controller", options)
+PiAmrController::PiAmrController(const rclcpp::NodeOptions & options)
+: Node("pi_amr_controller", options)
 {
-  /* ---------------- Parameters ---------------- */
-
-  this->declare_parameter<std::string>(
-    "serial_port",
-    "/dev/ttyACM2"
-  );
-
-  this->declare_parameter<double>(
-    "wheel_radius",
-    0.0485
-  );
-
-  this->declare_parameter<double>(
-    "wheel_base_x",
-    0.25
-  );
-
-  this->declare_parameter<double>(
-    "wheel_base_y",
-    0.25
-  );
-
-  this->declare_parameter<double>(
-    "max_wheel_speed_mps",
-    2.0
-  );
-
-  this->declare_parameter<double>(
-    "cmd_vel_timeout",
-    0.5
-  );
-
-  this->declare_parameter<double>(
-    "longitudinal_gain",
-    -1.0
-  );
-
-  this->declare_parameter<double>(
-    "lateral_gain",
-    1.0
-  );
-
-  this->declare_parameter<double>(
-    "angular_gain",
-    -1.0
-  );
-
-  /* ---------------- Read parameters ---------------- */
-
-  port_name_ =
-    this->get_parameter("serial_port").as_string();
-
-  r_ =
-    this->get_parameter("wheel_radius").as_double();
-
-  lx_ =
-    this->get_parameter("wheel_base_x").as_double();
-
-  ly_ =
-    this->get_parameter("wheel_base_y").as_double();
-
-  max_wheel_speed_mps_ =
-    this->get_parameter(
-      "max_wheel_speed_mps"
-    ).as_double();
-
-  cmd_vel_timeout_s_ =
-    this->get_parameter(
-      "cmd_vel_timeout"
-    ).as_double();
-
-  longitudinal_gain_ =
-    this->get_parameter(
-      "longitudinal_gain"
-    ).as_double();
-
-  lateral_gain_ =
-    this->get_parameter(
-      "lateral_gain"
-    ).as_double();
-
-  angular_gain_ =
-    this->get_parameter(
-      "angular_gain"
-    ).as_double();
-
-  /* ---------------- Validate parameters ---------------- */
-
-  if (!std::isfinite(r_) || r_ <= 0.0)
-  {
-    RCLCPP_WARN(
-      this->get_logger(),
-      "Invalid wheel_radius. Using 0.0485 m."
-    );
-
-    r_ = 0.0485;
-  }
-
-  if (!std::isfinite(lx_) || lx_ < 0.0)
-  {
-    lx_ = 0.25;
-  }
-
-  if (!std::isfinite(ly_) || ly_ < 0.0)
-  {
-    ly_ = 0.25;
-  }
-
-  if ((lx_ + ly_) <= 0.0)
-  {
-    RCLCPP_WARN(
-      this->get_logger(),
-      "Invalid wheel base. Using 0.25 m, 0.25 m."
-    );
-
-    lx_ = 0.25;
-    ly_ = 0.25;
-  }
-
-  if (!std::isfinite(max_wheel_speed_mps_) ||
-      max_wheel_speed_mps_ <= 0.0)
-  {
-    RCLCPP_WARN(
-      this->get_logger(),
-      "Invalid max wheel speed. Using 2.0 m/s."
-    );
-
-    max_wheel_speed_mps_ = 2.0;
-  }
-
-  /*
-   * int16_t mm/s chỉ biểu diễn tối đa
-   * khoảng 32.767 m/s.
-   */
-  if (max_wheel_speed_mps_ > 32.767)
-  {
-    RCLCPP_WARN(
-      this->get_logger(),
-      "max_wheel_speed_mps is too large. "
-      "Limited to 32.767 m/s."
-    );
-
-    max_wheel_speed_mps_ = 32.767;
-  }
-
-  if (!std::isfinite(cmd_vel_timeout_s_) ||
-      cmd_vel_timeout_s_ <= 0.0)
-  {
-    RCLCPP_WARN(
-      this->get_logger(),
-      "Invalid cmd_vel timeout. Using 0.5 s."
-    );
-
-    cmd_vel_timeout_s_ = 0.5;
-  }
-
-  /* ---------------- ROS2 objects ---------------- */
-
-  odom_pub_ =
-    this->create_publisher<nav_msgs::msg::Odometry>(
-      "/odom",
-      10
-    );
-
-  tf_broadcaster_ =
-    std::make_unique<tf2_ros::TransformBroadcaster>(
-      *this
-    );
-
-  cmd_vel_sub_ =
-    this->create_subscription<geometry_msgs::msg::Twist>(
-      "/cmd_vel",
-      10,
-      std::bind(
-        &AppController::cmd_vel_callback,
-        this,
-        std::placeholders::_1
-      )
-    );
-
-  /* ---------------- Initial state ---------------- */
-
-  target_vx_ = 0.0;
-  target_vy_ = 0.0;
-  target_wz_ = 0.0;
-
-  x_ = 0.0;
-  y_ = 0.0;
-  theta_ = 0.0;
-
-  const rclcpp::Time now =
-    this->get_clock()->now();
-
-  last_time_ = now;
-  last_cmd_vel_time_ = now;
-
-  /* ---------------- Serial ---------------- */
-
-  init_serial();
-
-  /* ---------------- Main timer: 50 Hz ---------------- */
-
-  timer_ = this->create_wall_timer(
-    20ms,
-    std::bind(
-      &AppController::update_loop,
-      this
-    )
-  );
-
-  RCLCPP_INFO(
-    this->get_logger(),
-    "AppController initialized | "
-    "port=%s radius=%.4f m "
-    "max_wheel_speed=%.3f m/s "
-    "cmd_timeout=%.3f s",
-    port_name_.c_str(),
-    r_,
-    max_wheel_speed_mps_,
-    cmd_vel_timeout_s_
-  );
-}
-
-
-/* =========================================================
- * Destructor
- * ========================================================= */
-AppController::~AppController()
-{
-  if (serial_fd_ >= 0)
-  {
-    /*
-     * Gửi một frame dừng trước khi đóng serial.
-     */
-    send_hardware_velocities(
-      0.0,
-      0.0,
-      0.0,
-      0.0
-    );
-
-    tcdrain(serial_fd_);
-
-    ::close(serial_fd_);
-    serial_fd_ = -1;
-
-    RCLCPP_INFO(
-      this->get_logger(),
-      "Serial port closed"
-    );
-  }
-}
-
-
-/* =========================================================
- * Initialize serial port
- * ========================================================= */
-void AppController::init_serial()
-{
-  serial_fd_ = ::open(
-    port_name_.c_str(),
-    O_RDWR | O_NOCTTY | O_NDELAY
-  );
-
-  if (serial_fd_ < 0)
-  {
-    RCLCPP_ERROR(
-      this->get_logger(),
-      "Failed to open serial port %s: %s",
-      port_name_.c_str(),
-      std::strerror(errno)
-    );
-
-    return;
-  }
-
-  /*
-   * Chuyển file descriptor sang blocking mode.
-   * VMIN và VTIME vẫn được cấu hình cho read không chờ.
-   */
-  if (fcntl(serial_fd_, F_SETFL, 0) < 0)
-  {
-    RCLCPP_WARN(
-      this->get_logger(),
-      "Failed to set serial blocking mode: %s",
-      std::strerror(errno)
-    );
-  }
-
-  struct termios tty;
-  std::memset(&tty, 0, sizeof(tty));
-
-  if (tcgetattr(serial_fd_, &tty) != 0)
-  {
-    RCLCPP_ERROR(
-      this->get_logger(),
-      "Failed to get serial attributes: %s",
-      std::strerror(errno)
-    );
-
-    ::close(serial_fd_);
-    serial_fd_ = -1;
-
-    return;
-  }
-
-  /* ---------------- Baud rate ---------------- */
-
-  if (cfsetispeed(&tty, B115200) != 0 ||
-      cfsetospeed(&tty, B115200) != 0)
-  {
-    RCLCPP_ERROR(
-      this->get_logger(),
-      "Failed to set serial baud rate"
-    );
-
-    ::close(serial_fd_);
-    serial_fd_ = -1;
-
-    return;
-  }
-
-  /* ---------------- 8N1 ---------------- */
-
-  tty.c_cflag &= ~CSIZE;
-  tty.c_cflag |= CS8;
-
-  tty.c_cflag &= ~PARENB;
-  tty.c_cflag &= ~CSTOPB;
-
-#ifdef CRTSCTS
-  tty.c_cflag &= ~CRTSCTS;
-#endif
-
-  tty.c_cflag |= CLOCAL;
-  tty.c_cflag |= CREAD;
-
-  /* ---------------- Raw input ---------------- */
-
-  tty.c_lflag &= ~ICANON;
-  tty.c_lflag &= ~ECHO;
-  tty.c_lflag &= ~ECHOE;
-  tty.c_lflag &= ~ISIG;
-
-  tty.c_iflag &= ~IXON;
-  tty.c_iflag &= ~IXOFF;
-  tty.c_iflag &= ~IXANY;
-
-  tty.c_iflag &= ~IGNBRK;
-  tty.c_iflag &= ~BRKINT;
-  tty.c_iflag &= ~PARMRK;
-  tty.c_iflag &= ~ISTRIP;
-  tty.c_iflag &= ~INLCR;
-  tty.c_iflag &= ~IGNCR;
-  tty.c_iflag &= ~ICRNL;
-
-  /* ---------------- Raw output ---------------- */
-
-  tty.c_oflag &= ~OPOST;
-
-#ifdef ONLCR
-  tty.c_oflag &= ~ONLCR;
-#endif
-
-  /*
-   * Read không chặn:
-   * nếu không có dữ liệu thì read() trả về ngay.
-   */
-  tty.c_cc[VMIN] = 0;
-  tty.c_cc[VTIME] = 0;
-
-  if (tcsetattr(
-        serial_fd_,
-        TCSANOW,
-        &tty
-      ) != 0)
-  {
-    RCLCPP_ERROR(
-      this->get_logger(),
-      "Failed to set serial attributes: %s",
-      std::strerror(errno)
-    );
-
-    ::close(serial_fd_);
-    serial_fd_ = -1;
-
-    return;
-  }
-
-  tcflush(serial_fd_, TCIOFLUSH);
-
-  RCLCPP_INFO(
-    this->get_logger(),
-    "Serial port opened: %s at 115200 baud",
-    port_name_.c_str()
-  );
-}
-
-
-/* =========================================================
- * CRC XOR
- *
- * CRC = XOR của tất cả byte trước CRC.
- * ========================================================= */
-uint8_t AppController::calculate_crc(
-  const uint8_t *data,
-  std::size_t length
-)
-{
-  uint8_t crc = 0;
-
-  for (std::size_t i = 0; i < length; ++i)
-  {
-    crc ^= data[i];
-  }
-
-  return crc;
-}
-
-
-/* =========================================================
- * Convert velocity
- *
- * m/s -> mm/s -> int16_t
- *
- * Giới hạn cuối cùng:
- * max_wheel_speed_mps_
- * ========================================================= */
-int16_t AppController::velocity_to_int16(
-  double velocity_m_s
-)
-{
-  if (!std::isfinite(velocity_m_s))
-  {
-    return 0;
-  }
-
-  long velocity_mm_s =
-    std::lround(
-      velocity_m_s * 1000.0
-    );
-
-  long max_velocity_mm_s =
-    std::lround(
-      std::fabs(max_wheel_speed_mps_) * 1000.0
-    );
-
-  const long int16_max =
-    static_cast<long>(
-      std::numeric_limits<int16_t>::max()
-    );
-
-  if (max_velocity_mm_s > int16_max)
-  {
-    max_velocity_mm_s = int16_max;
-  }
-
-  if (max_velocity_mm_s < 1)
-  {
-    max_velocity_mm_s = 1;
-  }
-
-  if (velocity_mm_s > max_velocity_mm_s)
-  {
-    velocity_mm_s = max_velocity_mm_s;
-  }
-  else if (velocity_mm_s < -max_velocity_mm_s)
-  {
-    velocity_mm_s = -max_velocity_mm_s;
-  }
-
-  return static_cast<int16_t>(
-    velocity_mm_s
-  );
-}
-
-
-/* =========================================================
- * Send binary frame
- *
- * Frame 11 bytes:
- *
- * byte 0  : 0xAA
- * byte 1  : 0x55
- *
- * byte 2  : v1 low
- * byte 3  : v1 high
- *
- * byte 4  : v2 low
- * byte 5  : v2 high
- *
- * byte 6  : v3 low
- * byte 7  : v3 high
- *
- * byte 8  : v4 low
- * byte 9  : v4 high
- *
- * byte 10 : CRC XOR byte 0 -> byte 9
- *
- * v1...v4:
- * int16_t, đơn vị mm/s, little-endian
- * ========================================================= */
-bool AppController::send_hardware_velocities(
-  double v1,
-  double v2,
-  double v3,
-  double v4
-)
-{
-  if (serial_fd_ < 0)
-  {
-    RCLCPP_WARN_THROTTLE(
-      this->get_logger(),
-      *this->get_clock(),
-      1000,
-      "Cannot send frame: serial port is closed"
-    );
-
-    return false;
-  }
-
-  constexpr uint8_t HEADER_1 = 0xAA;
-  constexpr uint8_t HEADER_2 = 0x55;
-
-  const int16_t speed1 =
-    velocity_to_int16(v1);
-
-  const int16_t speed2 =
-    velocity_to_int16(v2);
-
-  const int16_t speed3 =
-    velocity_to_int16(v3);
-
-  const int16_t speed4 =
-    velocity_to_int16(v4);
-
-  std::array<uint8_t, 11> frame{};
-
-  frame[0] = HEADER_1;
-  frame[1] = HEADER_2;
-
-  const auto pack_int16 =
-    [&frame](
-      std::size_t index,
-      int16_t value
-    )
-    {
-      const uint16_t raw =
-        static_cast<uint16_t>(value);
-
-      frame[index] =
-        static_cast<uint8_t>(
-          raw & 0x00FFU
-        );
-
-      frame[index + 1] =
-        static_cast<uint8_t>(
-          (raw >> 8U) & 0x00FFU
-        );
-    };
-
-  pack_int16(2, speed1);
-  pack_int16(4, speed2);
-  pack_int16(6, speed3);
-  pack_int16(8, speed4);
-
-  /*
-   * CRC của 10 byte đầu.
-   */
-  frame[10] = calculate_crc(
-    frame.data(),
-    10
-  );
-
-  std::size_t total_written = 0;
-
-  while (total_written < frame.size())
-  {
-    const ssize_t bytes_written =
-      ::write(
-        serial_fd_,
-        frame.data() + total_written,
-        frame.size() - total_written
-      );
-
-    if (bytes_written < 0)
-    {
-      if (errno == EINTR)
-      {
-        continue;
-      }
-
-      RCLCPP_ERROR(
-        this->get_logger(),
-        "Failed to send binary frame: %s",
-        std::strerror(errno)
-      );
-
-      return false;
-    }
-
-    if (bytes_written == 0)
-    {
-      RCLCPP_ERROR(
-        this->get_logger(),
-        "Serial write returned zero bytes"
-      );
-
-      return false;
-    }
-
-    total_written +=
-      static_cast<std::size_t>(
-        bytes_written
-      );
-  }
-
-  // RCLCPP_INFO_THROTTLE(
-  //   this->get_logger(),
-  //   *this->get_clock(),
-  //   1000,
-  //   "Binary TX: "
-  //   "%02X %02X "
-  //   "%02X %02X "
-  //   "%02X %02X "
-  //   "%02X %02X "
-  //   "%02X %02X "
-  //   "%02X | "
-  //   "mm/s: %d %d %d %d",
-  //   static_cast<unsigned int>(frame[0]),
-  //   static_cast<unsigned int>(frame[1]),
-  //   static_cast<unsigned int>(frame[2]),
-  //   static_cast<unsigned int>(frame[3]),
-  //   static_cast<unsigned int>(frame[4]),
-  //   static_cast<unsigned int>(frame[5]),
-  //   static_cast<unsigned int>(frame[6]),
-  //   static_cast<unsigned int>(frame[7]),
-  //   static_cast<unsigned int>(frame[8]),
-  //   static_cast<unsigned int>(frame[9]),
-  //   static_cast<unsigned int>(frame[10]),
-  //   static_cast<int>(speed1),
-  //   static_cast<int>(speed2),
-  //   static_cast<int>(speed3),
-  //   static_cast<int>(speed4)
-  // );
-
-  return true;
-}
-
-
-/* =========================================================
- * Receive /cmd_vel
- * ========================================================= */
-void AppController::cmd_vel_callback(
-  const geometry_msgs::msg::Twist::SharedPtr msg
-)
-{
-  target_vx_ = msg->linear.x;
-  target_vy_ = msg->linear.y;
-  target_wz_ = msg->angular.z;
-
-  last_cmd_vel_time_ =
-    this->get_clock()->now();
-
-  // RCLCPP_INFO_THROTTLE(
-  //   this->get_logger(),
-  //   *this->get_clock(),
-  //   1000,
-  //   "Received cmd_vel: "
-  //   "vx=%.3f vy=%.3f wz=%.3f",
-  //   target_vx_,
-  //   target_vy_,
-  //   target_wz_
-  // );
-}
-
-
-/* =========================================================
- * Mecanum inverse kinematics
- *
- * Input:
- * vx, vy : m/s
- * wz     : rad/s
- *
- * Output:
- * w1...w4: rad/s
- * ========================================================= */
-void AppController::compute_wheel_targets(
-  double vx,
-  double vy,
-  double wz,
-  double &w1,
-  double &w2,
-  double &w3,
-  double &w4
-)
-{
-  if (r_ <= 0.0)
-  {
-    w1 = 0.0;
-    w2 = 0.0;
-    w3 = 0.0;
-    w4 = 0.0;
-
-    RCLCPP_ERROR_THROTTLE(
-      this->get_logger(),
-      *this->get_clock(),
-      1000,
-      "Invalid wheel radius: %.4f",
-      r_
-    );
-
-    return;
-  }
-
-  const double L = lx_ + ly_;
-
-  const double vx_comp =
-    vx * longitudinal_gain_;
-
-  const double vy_comp =
-    vy * lateral_gain_;
-
-  const double wz_comp =
-    wz * angular_gain_;
-
-  w1 =
-    (vx_comp - vy_comp - L * wz_comp) / r_;
-
-  w2 =
-    (vx_comp + vy_comp + L * wz_comp) / r_;
-
-  w3 =
-    (vx_comp + vy_comp - L * wz_comp) / r_;
-
-  w4 =
-    (vx_comp - vy_comp + L * wz_comp) / r_;
-}
-
-
-/* =========================================================
- * Convert rad/s to m/s and send
- *
- * Nếu một bánh vượt giới hạn, tất cả bánh được scale
- * cùng tỷ lệ để giữ đúng hướng chuyển động.
- * ========================================================= */
-void AppController::send_wheel_targets(
-  double w1,
-  double w2,
-  double w3,
-  double w4
-)
-{
-  if (serial_fd_ < 0)
-  {
-    return;
-  }
-
-  double v1 = w1 * r_;
-  double v2 = w2 * r_;
-  double v3 = w3 * r_;
-  double v4 = w4 * r_;
-
-  const double largest_velocity =
-    std::max(
-      std::max(
-        std::fabs(v1),
-        std::fabs(v2)
-      ),
-      std::max(
-        std::fabs(v3),
-        std::fabs(v4)
-      )
-    );
-
-  if (largest_velocity >
-        max_wheel_speed_mps_ &&
-      largest_velocity > 0.0)
-  {
-    const double scale =
-      max_wheel_speed_mps_ /
-      largest_velocity;
-
-    v1 *= scale;
-    v2 *= scale;
-    v3 *= scale;
-    v4 *= scale;
-
-    RCLCPP_WARN_THROTTLE(
-      this->get_logger(),
-      *this->get_clock(),
-      1000,
-      "Wheel commands scaled by %.3f "
-      "to respect %.3f m/s limit",
-      scale,
-      max_wheel_speed_mps_
-    );
-  }
-
-  send_hardware_velocities(
-    v1,
-    v2,
-    v3,
-    v4
-  );
-}
-
-
-/* =========================================================
- * Read actual wheel velocities from STM32
- *
- * Chưa triển khai feedback STM32 -> ROS2.
- *
- * Output trong tương lai phải là rad/s.
- * ========================================================= */
-bool AppController::read_hardware_velocities(
-  double &v1,
-  double &v2,
-  double &v3,
-  double &v4
-)
-{
-  if (serial_fd_ < 0)
-  {
-    return false;
-  }
-
-  if (r_ <= 0.0)
-  {
-    return false;
-  }
-
-  constexpr uint8_t FEEDBACK_HEADER_1 = 0xAB;
-  constexpr uint8_t FEEDBACK_HEADER_2 = 0xCD;
-  constexpr std::size_t FEEDBACK_FRAME_SIZE = 11;
-
-  /*
-    Đọc tất cả byte hiện có trong serial.
-  */
-  uint8_t temporary_buffer[64];
-
-  while (true)
-  {
-    const ssize_t bytes_read =
-      ::read(
-        serial_fd_,
-        temporary_buffer,
-        sizeof(temporary_buffer)
-      );
-
-    if (bytes_read > 0)
-    {
-      serial_rx_buffer_.insert(
-        serial_rx_buffer_.end(),
-        temporary_buffer,
-        temporary_buffer + bytes_read
-      );
-
-      /*
-        Tránh buffer tăng vô hạn khi dữ liệu lỗi.
-      */
-      if (serial_rx_buffer_.size() > 512)
-      {
-        const std::size_t remove_count =
-          serial_rx_buffer_.size() - 512;
-
-        serial_rx_buffer_.erase(
-          serial_rx_buffer_.begin(),
-          serial_rx_buffer_.begin() +
-          static_cast<std::ptrdiff_t>(remove_count)
-        );
-      }
-
-      continue;
-    }
-
-    if (bytes_read == 0)
-    {
-      break;
-    }
-
-    if (errno == EINTR)
-    {
-      continue;
-    }
-
-    if (errno == EAGAIN ||
-        errno == EWOULDBLOCK)
-    {
-      break;
-    }
-
-    RCLCPP_WARN_THROTTLE(
-      this->get_logger(),
-      *this->get_clock(),
-      1000,
-      "Serial read error: %s",
-      std::strerror(errno)
-    );
-
-    return false;
-  }
-
-  bool valid_feedback_received = false;
-
-  /*
-    Giải mã tất cả frame đang có.
-    Nếu có nhiều frame, giữ frame mới nhất.
-  */
-  while (serial_rx_buffer_.size() >= 2)
-  {
-    /*
-      Tìm đúng header AB CD.
-    */
-    if (serial_rx_buffer_[0] !=
-          FEEDBACK_HEADER_1 ||
-        serial_rx_buffer_[1] !=
-          FEEDBACK_HEADER_2)
-    {
-      serial_rx_buffer_.erase(
-        serial_rx_buffer_.begin()
-      );
-
-      continue;
-    }
-
-    /*
-      Có header nhưng chưa nhận đủ 11 byte.
-    */
-    if (serial_rx_buffer_.size() <
-        FEEDBACK_FRAME_SIZE)
-    {
-      break;
-    }
-
-    const uint8_t received_crc =
-      serial_rx_buffer_[10];
-
-    const uint8_t calculated_crc =
-      calculate_crc(
-        serial_rx_buffer_.data(),
-        10
-      );
-
-    if (received_crc != calculated_crc)
-    {
-      RCLCPP_WARN_THROTTLE(
-        this->get_logger(),
-        *this->get_clock(),
-        1000,
-        "Invalid feedback CRC"
-      );
-
-      /*
-        Bỏ một byte và tìm lại header.
-      */
-      serial_rx_buffer_.erase(
-        serial_rx_buffer_.begin()
-      );
-
-      continue;
-    }
-
-    const auto decode_int16_le =
-      [](
-        uint8_t low_byte,
-        uint8_t high_byte
-      ) -> int16_t
-      {
-        const uint16_t raw =
-          static_cast<uint16_t>(low_byte) |
-          (
-            static_cast<uint16_t>(high_byte)
-            << 8U
-          );
-
-        return static_cast<int16_t>(raw);
-      };
-
-    const int16_t speed1_mmps =
-      decode_int16_le(
-        serial_rx_buffer_[2],
-        serial_rx_buffer_[3]
-      );
-
-    const int16_t speed2_mmps =
-      decode_int16_le(
-        serial_rx_buffer_[4],
-        serial_rx_buffer_[5]
-      );
-
-    const int16_t speed3_mmps =
-      decode_int16_le(
-        serial_rx_buffer_[6],
-        serial_rx_buffer_[7]
-      );
-
-    const int16_t speed4_mmps =
-      decode_int16_le(
-        serial_rx_buffer_[8],
-        serial_rx_buffer_[9]
-      );
-
-    const uint8_t kp1 = decode_int8(serial_rx_buffer_[10]);
-    const uint8_t ki1 = decode_int8(serial_rx_buffer_[11]);
+    // 1. Parameters
+    this->declare_parameter<std::string>("port_name", "/dev/ttyUSB1");
+    this->declare_parameter<double>("wheel_radius", 0.05);
+    this->declare_parameter<double>("base_x", 0.2);
+    this->declare_parameter<double>("base_y", 0.2);
+
+    this->get_parameter("port_name", port_name_);
+    this->get_parameter("wheel_radius", radius_);
+    this->get_parameter("base_x", base_x_);
+    this->get_parameter("base_y", base_y_);
+
+    // 2. Init Hardware
+    initSerial();
+
+    // 3. Init Publishers & Subscribers
+    odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
     
+    // Topic phản hồi cho GUI
+    wheel_telemetry_pub_ = this->create_publisher<amr_common::msg::WheelTelemetry>("/wheel_telemetry", 10);
+    cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
+        "/cmd_vel", 10,
+        std::bind(&PiAmrController::cmdVelCallback, this, std::placeholders::_1));
 
-    /*
-      STM32 gửi tốc độ dài m/s.
-      Odometry cần tốc độ góc rad/s.
+    pid_sub_ = this->create_subscription<geometry_msgs::msg::Vector3>(
+        "/gui/set_pid", 10,
+        std::bind(&PiAmrController::pidCallback, this, std::placeholders::_1));
 
-      omega = v / r
-    */
-    v1 =
-      (
-        static_cast<double>(speed1_mmps) /
-        1000.0
-      ) / r_;
+    tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
-    v2 =
-      (
-        static_cast<double>(speed2_mmps) /
-        1000.0
-      ) / r_;
+    // 4. Timer Update (50Hz)
+    last_time_ = this->now();
+    timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(20),
+        std::bind(&PiAmrController::updateLoop, this));
 
-    v3 =
-      (
-        static_cast<double>(speed3_mmps) /
-        1000.0
-      ) / r_;
-
-    v4 =
-      (
-        static_cast<double>(speed4_mmps) /
-        1000.0
-      ) / r_;
-
-    valid_feedback_received = true;
-
-    /*
-      Xóa frame đã xử lý.
-    */
-    serial_rx_buffer_.erase(
-      serial_rx_buffer_.begin(),
-      serial_rx_buffer_.begin() +
-      static_cast<std::ptrdiff_t>(
-        FEEDBACK_FRAME_SIZE
-      )
-    );
-  }
-
-  if (valid_feedback_received)
-  {
-    const double wheel1_mps = v1 * r_;
-    const double wheel2_mps = v2 * r_;
-    const double wheel3_mps = v3 * r_;
-    const double wheel4_mps = v4 * r_;
-
-  RCLCPP_INFO_THROTTLE(
-    this->get_logger(),
-    *this->get_clock(),
-    1000,
-    "Actual wheel speed m/s: "
-    "M1=%.3f M2=%.3f M3=%.3f M4=%.3f",
-    wheel1_mps,
-    wheel2_mps,
-    wheel3_mps,
-    wheel4_mps
- );
-  }
-
-  return valid_feedback_received;
+    RCLCPP_INFO(this->get_logger(), "PiAmrController Node started with unified wheel telemetry!");
 }
 
-
-/* =========================================================
- * Main update loop: 50 Hz
- * ========================================================= */
-void AppController::update_loop()
+PiAmrController::~PiAmrController()
 {
-  const rclcpp::Time current_time =
-    this->get_clock()->now();
+    if (serial_fd_ != -1) {
+        close(serial_fd_);
+        RCLCPP_INFO(this->get_logger(), "Serial port closed.");
+    }
+}
 
-  /* ---------------- ROS2 command watchdog ---------------- */
-
-  const double cmd_age =
-    (current_time - last_cmd_vel_time_).seconds();
-
-  if (cmd_age > cmd_vel_timeout_s_)
-  {
-    const bool robot_was_commanded =
-      std::fabs(target_vx_) > 1e-6 ||
-      std::fabs(target_vy_) > 1e-6 ||
-      std::fabs(target_wz_) > 1e-6;
-
-    if (robot_was_commanded)
-    {
-      RCLCPP_WARN(
-        this->get_logger(),
-        "cmd_vel timeout after %.3f s. "
-        "Stopping robot.",
-        cmd_age
-      );
+void PiAmrController::initSerial()
+{
+    serial_fd_ = open(port_name_.c_str(), O_RDWR | O_NOCTTY | O_NDELAY);
+    if (serial_fd_ == -1) {
+        RCLCPP_ERROR(this->get_logger(), "Failed to open serial port: %s", port_name_.c_str());
+        return;
     }
 
-    target_vx_ = 0.0;
-    target_vy_ = 0.0;
-    target_wz_ = 0.0;
-  }
+    struct termios options;
+    tcgetattr(serial_fd_, &options);
+    cfsetispeed(&options, B115200);
+    cfsetospeed(&options, B115200);
 
-  /* ---------------- Inverse kinematics ---------------- */
+    options.c_cflag |= (CLOCAL | CREAD);
+    options.c_cflag &= ~PARENB;
+    options.c_cflag &= ~CSTOPB;
+    options.c_cflag &= ~CSIZE;
+    options.c_cflag |= CS8;
+    options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
+    options.c_oflag &= ~OPOST;
 
-  double w1_cmd = 0.0;
-  double w2_cmd = 0.0;
-  double w3_cmd = 0.0;
-  double w4_cmd = 0.0;
+    tcflush(serial_fd_, TCIFLUSH);
+    tcsetattr(serial_fd_, TCSANOW, &options);
 
-  compute_wheel_targets(
-    target_vx_,
-    target_vy_,
-    target_wz_,
-    w1_cmd,
-    w2_cmd,
-    w3_cmd,
-    w4_cmd
-  );
-
-  send_wheel_targets(
-    w1_cmd,
-    w2_cmd,
-    w3_cmd,
-    w4_cmd
-  );
-
-  RCLCPP_INFO_THROTTLE(
-    this->get_logger(),
-    *this->get_clock(),
-    1000,
-    "Target: vx=%.3f vy=%.3f wz=%.3f | "
-    "wheel rad/s: %.3f %.3f %.3f %.3f",
-    target_vx_,
-    target_vy_,
-    target_wz_,
-    w1_cmd,
-    w2_cmd,
-    w3_cmd,
-    w4_cmd
-  );
-
-  /* ---------------- Read feedback ---------------- */
-
-  double u1 = 0.0;
-  double u2 = 0.0;
-  double u3 = 0.0;
-  double u4 = 0.0;
-
-  if (!read_hardware_velocities(
-        u1,
-        u2,
-        u3,
-        u4
-      ))
-  {
-    last_time_ = current_time;
-    return;
-  }
-
-  /* ---------------- Time step ---------------- */
-
-  const double dt =
-    (current_time - last_time_).seconds();
-
-  if (!std::isfinite(dt) || dt <= 0.0)
-  {
-    last_time_ = current_time;
-    return;
-  }
-
-  const double L = lx_ + ly_;
-
-  if (L <= 0.0)
-  {
-    RCLCPP_ERROR_THROTTLE(
-      this->get_logger(),
-      *this->get_clock(),
-      1000,
-      "Invalid robot dimensions: lx + ly <= 0"
-    );
-
-    last_time_ = current_time;
-    return;
-  }
-
-  /* ---------------- Forward kinematics ---------------- */
-
-  const double vx =
-    (r_ / 4.0) *
-    (u1 + u2 + u3 + u4);
-
-  const double vy =
-    (r_ / 4.0) *
-    (-u1 + u2 + u3 - u4);
-
-  const double wz =
-    (r_ / (4.0 * L)) *
-    (-u1 + u2 - u3 + u4);
-
-  
-  RCLCPP_INFO_THROTTLE(
-  this->get_logger(),
-  *this->get_clock(),
-  1000,
-  "Actual robot velocity: "
-  "vx=%.3f m/s vy=%.3f m/s wz=%.3f rad/s",
-  vx,
-  vy,
-  wz
- );
- /* ---------------- Integrate odometry ---------------- */
-  const double delta_x =
-    (
-      vx * std::cos(theta_) -
-      vy * std::sin(theta_)
-    ) * dt;
-
-  const double delta_y =
-    (
-      vx * std::sin(theta_) +
-      vy * std::cos(theta_)
-    ) * dt;
-
-  const double delta_theta =
-    wz * dt;
-
-  x_ += delta_x;
-  y_ += delta_y;
-  theta_ += delta_theta;
-
-  theta_ =
-    std::atan2(
-      std::sin(theta_),
-      std::cos(theta_)
-    );
-
-  /* ---------------- Quaternion ---------------- */
-
-  tf2::Quaternion quaternion;
-
-  quaternion.setRPY(
-    0.0,
-    0.0,
-    theta_
-  );
-
-  /* ---------------- TF odom -> base_footprint ---------------- */
-
-  geometry_msgs::msg::TransformStamped tf_msg;
-
-  tf_msg.header.stamp = current_time;
-  tf_msg.header.frame_id = "odom";
-  tf_msg.child_frame_id = "base_footprint";
-
-  tf_msg.transform.translation.x = x_;
-  tf_msg.transform.translation.y = y_;
-  tf_msg.transform.translation.z = 0.0;
-
-  tf_msg.transform.rotation.x = quaternion.x();
-  tf_msg.transform.rotation.y = quaternion.y();
-  tf_msg.transform.rotation.z = quaternion.z();
-  tf_msg.transform.rotation.w = quaternion.w();
-
-  tf_broadcaster_->sendTransform(tf_msg);
-
-  /* ---------------- Odometry message ---------------- */
-
-  nav_msgs::msg::Odometry odom_msg;
-
-  odom_msg.header.stamp = current_time;
-  odom_msg.header.frame_id = "odom";
-  odom_msg.child_frame_id = "base_footprint";
-
-  odom_msg.pose.pose.position.x = x_;
-  odom_msg.pose.pose.position.y = y_;
-  odom_msg.pose.pose.position.z = 0.0;
-
-  odom_msg.pose.pose.orientation =
-    tf_msg.transform.rotation;
-
-  odom_msg.twist.twist.linear.x = vx;
-  odom_msg.twist.twist.linear.y = vy;
-  odom_msg.twist.twist.angular.z = wz;
-
-  odom_pub_->publish(odom_msg);
-
-  last_time_ = current_time;
+    RCLCPP_INFO(this->get_logger(), "Opened and configured Serial: %s (115200)", port_name_.c_str());
 }
 
-int main(int argc, char* argv[]) {
-  rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<AppController>());
-  rclcpp::shutdown();
-  return 0;
+void PiAmrController::cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg)
+{
+    target_vx_ = msg->linear.x;
+    target_vy_ = msg->linear.y;
+    target_wz_ = msg->angular.z;
+
+    // Mecanum inverse kinematics (m/s per wheel):
+    // v1: Front Left, v2: Front Right, v3: Rear Left, v4: Rear Right
+    double k = (base_x_ + base_y_);
+    target_v_[0] = target_vx_ - target_vy_ - k * target_wz_;
+    target_v_[1] = target_vx_ + target_vy_ + k * target_wz_;
+    target_v_[2] = target_vx_ + target_vy_ - k * target_wz_;
+    target_v_[3] = target_vx_ - target_vy_ + k * target_wz_;
+
+    sendTargetVelocity(target_vx_, target_vy_, target_wz_);
+}
+
+void PiAmrController::pidCallback(const geometry_msgs::msg::Vector3::SharedPtr msg)
+{
+    sendPidParameters(msg->x, msg->y, msg->z);
+    RCLCPP_INFO(this->get_logger(), "Sent PID to STM32: Kp=%.3f, Ki=%.3f, Kd=%.3f", msg->x, msg->y, msg->z);
+}
+
+void PiAmrController::sendTargetVelocity(const double &vx, const double &vy, const double &wz)
+{
+    if (serial_fd_ == -1) return;
+
+    int16_t vx_int = velocityToInt16(vx);
+    int16_t vy_int = velocityToInt16(vy);
+    int16_t wz_int = velocityToInt16(wz);
+
+    uint8_t frame[10];
+    frame[0] = 0xAA;
+    frame[1] = 0x55;
+    frame[2] = 0x01;
+    frame[3] = (vx_int >> 8) & 0xFF;
+    frame[4] = vx_int & 0xFF;
+    frame[5] = (vy_int >> 8) & 0xFF;
+    frame[6] = vy_int & 0xFF;
+    frame[7] = (wz_int >> 8) & 0xFF;
+    frame[8] = wz_int & 0xFF;
+    frame[9] = calculateCRC(frame, 9);
+
+    write(serial_fd_, frame, sizeof(frame));
+}
+
+void PiAmrController::sendPidParameters(double kp, double ki, double kd)
+{
+    if (serial_fd_ == -1) return;
+
+    int16_t kp_int = static_cast<int16_t>(kp * 1000.0);
+    int16_t ki_int = static_cast<int16_t>(ki * 1000.0);
+    int16_t kd_int = static_cast<int16_t>(kd * 1000.0);
+
+    uint8_t frame[10];
+    frame[0] = 0xAA;
+    frame[1] = 0x55;
+    frame[2] = 0x02;
+    frame[3] = (kp_int >> 8) & 0xFF;
+    frame[4] = kp_int & 0xFF;
+    frame[5] = (ki_int >> 8) & 0xFF;
+    frame[6] = ki_int & 0xFF;
+    frame[7] = (kd_int >> 8) & 0xFF;
+    frame[8] = kd_int & 0xFF;
+    frame[9] = calculateCRC(frame, 9);
+
+    write(serial_fd_, frame, sizeof(frame));
+}
+
+void PiAmrController::processSerialData()
+{
+    if (serial_fd_ == -1) return;
+
+    uint8_t buffer[128];
+    int bytes_read = read(serial_fd_, buffer, sizeof(buffer));
+
+    if (bytes_read > 0) {
+        serial_rx_buffer_.insert(serial_rx_buffer_.end(), buffer, buffer + bytes_read);
+    }
+
+    while (serial_rx_buffer_.size() >= 10) {
+        if (serial_rx_buffer_[0] == 0xAA && serial_rx_buffer_[1] == 0x55) {
+            uint8_t cmd = serial_rx_buffer_[2];
+
+            // 1. Wheel velocity feedback (12 bytes)
+            if (cmd == 0x01) {
+                if (serial_rx_buffer_.size() < 12) break;
+
+                uint8_t crc = calculateCRC(&serial_rx_buffer_[0], 11);
+                if (crc == serial_rx_buffer_[11]) {
+                    int16_t rpm_v1 = (serial_rx_buffer_[3] << 8) | serial_rx_buffer_[4];
+                    int16_t rpm_v2 = (serial_rx_buffer_[5] << 8) | serial_rx_buffer_[6];
+                    int16_t rpm_v3 = (serial_rx_buffer_[7] << 8) | serial_rx_buffer_[8];
+                    int16_t rpm_v4 = (serial_rx_buffer_[9] << 8) | serial_rx_buffer_[10];
+
+                    double rpm_to_m_s = (M_PI * radius_) / 30.0;
+                    current_v1_ = static_cast<double>(rpm_v1) * rpm_to_m_s;
+                    current_v2_ = static_cast<double>(rpm_v2) * rpm_to_m_s;
+                    current_v3_ = static_cast<double>(rpm_v3) * rpm_to_m_s;
+                    current_v4_ = static_cast<double>(rpm_v4) * rpm_to_m_s;
+
+                    serial_rx_buffer_.erase(serial_rx_buffer_.begin(), serial_rx_buffer_.begin() + 12);
+                    continue;
+                }
+            } 
+            // 2. PID feedback from STM32 (10 bytes)
+            else if (cmd == 0x03) {
+                if (serial_rx_buffer_.size() < 10) break;
+
+                uint8_t crc = calculateCRC(&serial_rx_buffer_[0], 9);
+                if (crc == serial_rx_buffer_[9]) {
+                    int16_t kp_int = (serial_rx_buffer_[3] << 8) | serial_rx_buffer_[4];
+                    int16_t ki_int = (serial_rx_buffer_[5] << 8) | serial_rx_buffer_[6];
+                    int16_t kd_int = (serial_rx_buffer_[7] << 8) | serial_rx_buffer_[8];
+
+                    current_kp_ = static_cast<double>(kp_int) / 1000.0;
+                    current_ki_ = static_cast<double>(ki_int) / 1000.0;
+                    current_kd_ = static_cast<double>(kd_int) / 1000.0;
+
+                    serial_rx_buffer_.erase(serial_rx_buffer_.begin(), serial_rx_buffer_.begin() + 10);
+                    continue;
+                }
+            }
+        }
+        serial_rx_buffer_.erase(serial_rx_buffer_.begin());
+    }
+}
+
+void PiAmrController::updateLoop()
+{
+    // 1. Process feedback bytes from STM32
+    processSerialData();
+
+    // 2. Mecanum forward kinematics
+    double current_vx = (current_v1_ + current_v2_ + current_v3_ + current_v4_) / 4.0;
+    double current_vy = (-current_v1_ + current_v2_ + current_v3_ - current_v4_) / 4.0;
+    double current_wz = (-current_v1_ + current_v2_ - current_v3_ + current_v4_) / (4.0 * (base_x_ + base_y_));
+
+    // 3. Publish unified WheelTelemetry to /wheel_telemetry
+    amr_common::msg::WheelTelemetry telem_msg;
+    for (int i = 0; i < 4; ++i) {
+        telem_msg.target_velocity[i] = target_v_[i];
+        telem_msg.kp[i] = current_kp_;
+        telem_msg.ki[i] = current_ki_;
+        telem_msg.kd[i] = current_kd_;
+    }
+    telem_msg.current_velocity[0] = current_v1_;
+    telem_msg.current_velocity[1] = current_v2_;
+    telem_msg.current_velocity[2] = current_v3_;
+    telem_msg.current_velocity[3] = current_v4_;
+
+    wheel_telemetry_pub_->publish(telem_msg);
+
+    // 4. Odometry & TF Integration
+    rclcpp::Time current_time = this->now();
+    double dt = (current_time - last_time_).seconds();
+    last_time_ = current_time;
+
+    double delta_x = (current_vx * cos(yaw_) - current_vy * sin(yaw_)) * dt;
+    double delta_y = (current_vx * sin(yaw_) + current_vy * cos(yaw_)) * dt;
+    double delta_yaw = current_wz * dt;
+
+    x_ += delta_x;
+    y_ += delta_y;
+    yaw_ += delta_yaw;
+
+    tf2::Quaternion q;
+    q.setRPY(0, 0, yaw_);
+
+    geometry_msgs::msg::TransformStamped t;
+    t.header.stamp = current_time;
+    t.header.frame_id = "odom";
+    t.child_frame_id = "base_link";
+    t.transform.translation.x = x_;
+    t.transform.translation.y = y_;
+    t.transform.translation.z = 0.0;
+    t.transform.rotation.x = q.x();
+    t.transform.rotation.y = q.y();
+    t.transform.rotation.z = q.z();
+    t.transform.rotation.w = q.w();
+    tf_broadcaster_->sendTransform(t);
+
+    nav_msgs::msg::Odometry odom;
+    odom.header.stamp = current_time;
+    odom.header.frame_id = "odom";
+    odom.child_frame_id = "base_link";
+    odom.pose.pose.position.x = x_;
+    odom.pose.pose.position.y = y_;
+    odom.pose.pose.position.z = 0.0;
+    odom.pose.pose.orientation.x = q.x();
+    odom.pose.pose.orientation.y = q.y();
+    odom.pose.pose.orientation.z = q.z();
+    odom.pose.pose.orientation.w = q.w();
+    odom.twist.twist.linear.x = current_vx;
+    odom.twist.twist.linear.y = current_vy;
+    odom.twist.twist.angular.z = current_wz;
+
+    odom_pub_->publish(odom);
+}
+
+uint8_t PiAmrController::calculateCRC(const uint8_t* data, std::size_t length)
+{
+    uint8_t crc = 0x00;
+    for (std::size_t i = 0; i < length; ++i) {
+        crc ^= data[i];
+    }
+    return crc;
+}
+
+int16_t PiAmrController::velocityToInt16(double velocity_m_s)
+{
+    return static_cast<int16_t>(velocity_m_s * 1000.0);
+}
+
+int main(int argc, char * argv[])
+{
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<PiAmrController>();
+    rclcpp::spin(node);
+    rclcpp::shutdown();
+    return 0;
 }
