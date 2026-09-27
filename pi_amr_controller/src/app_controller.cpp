@@ -51,6 +51,7 @@ PiAmrController::~PiAmrController()
 
 void PiAmrController::initSerial()
 {
+    // Open in Read/Write mode, no controlling terminal, non-blocking
     serial_fd_ = open(port_name_.c_str(), O_RDWR | O_NOCTTY | O_NDELAY);
     if (serial_fd_ == -1) {
         RCLCPP_ERROR(this->get_logger(), "Failed to open serial port: %s", port_name_.c_str());
@@ -58,22 +59,39 @@ void PiAmrController::initSerial()
     }
 
     struct termios options;
-    tcgetattr(serial_fd_, &options);
+    if (tcgetattr(serial_fd_, &options) != 0) {
+        RCLCPP_ERROR(this->get_logger(), "Failed to get termios attributes for: %s", port_name_.c_str());
+        close(serial_fd_);
+        serial_fd_ = -1;
+        return;
+    }
+
+    // 1. Set Baud Rate
     cfsetispeed(&options, B115200);
     cfsetospeed(&options, B115200);
 
-    options.c_cflag |= (CLOCAL | CREAD);
-    options.c_cflag &= ~PARENB;
-    options.c_cflag &= ~CSTOPB;
+    cfmakeraw(&options);
+
+    options.c_cflag &= ~CRTSCTS;
+
+    options.c_cflag |= (CLOCAL | CREAD); 
+    options.c_cflag &= ~PARENB;          
+    options.c_cflag &= ~CSTOPB;          
     options.c_cflag &= ~CSIZE;
-    options.c_cflag |= CS8;
-    options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
-    options.c_oflag &= ~OPOST;
+    options.c_cflag |= CS8;              // 8 data bits
+    options.c_cc[VMIN]  = 0;             
+    options.c_cc[VTIME] = 0;             
 
-    tcflush(serial_fd_, TCIFLUSH);
-    tcsetattr(serial_fd_, TCSANOW, &options);
+    tcflush(serial_fd_, TCIOFLUSH);
 
-    RCLCPP_INFO(this->get_logger(), "Opened and configured Serial: %s (115200)", port_name_.c_str());
+    if (tcsetattr(serial_fd_, TCSANOW, &options) != 0) {
+        RCLCPP_ERROR(this->get_logger(), "Failed to set termios attributes for: %s", port_name_.c_str());
+        close(serial_fd_);
+        serial_fd_ = -1;
+        return;
+    }
+
+    RCLCPP_INFO(this->get_logger(), "Opened and configured Serial: %s (115200, 8N1, Raw)", port_name_.c_str());
 }
 
 void PiAmrController::cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg)

@@ -6,44 +6,51 @@ import "../common"
 Button {
     id: root
 
-    // Custom API properties
     property color baseColor: AppColors.buttonNormal
-    property color hoverColor: AppColors.green
+    property color hoverColor: AppColors.buttonHovered
     property color pressColor: AppColors.buttonPressed
     property color textColor: AppColors.textWhite
+
     property string iconSource: ""
+    property int textPixelSize: 13
+    property bool textBold: true
+    property string textFontFamily: "sans-serif"
 
     implicitWidth: 120
     implicitHeight: 36
 
-    contentItem: Row {
-        spacing: 6
-        anchors.centerIn: parent
+    contentItem: Item {
+        anchors.fill: parent
 
-        Image {
-            id: btnIcon
-            visible: root.iconSource !== ""
-            source: root.iconSource
-            width: 16
-            height: 16
-            anchors.verticalCenter: parent.verticalCenter
-            fillMode: Image.PreserveAspectFit
-        }
+        Row {
+            anchors.centerIn: parent
+            spacing: 6
 
-        Text {
-            text: root.text
-            font.bold: true
-            font.pixelSize: 13
-            color: root.textColor
-            anchors.verticalCenter: parent.verticalCenter
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
+            Image {
+                id: btnIcon
+                visible: root.iconSource !== ""
+                source: root.iconSource
+                width: 16
+                height: 16
+                anchors.verticalCenter: parent.verticalCenter
+                fillMode: Image.PreserveAspectFit
+            }
+
+            Text {
+                text: root.text
+                color: root.textColor
+                font.pixelSize: root.textPixelSize
+                font.bold: root.textBold
+                font.family: root.textFontFamily
+                anchors.verticalCenter: parent.verticalCenter
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
         }
     }
 
     background: Rectangle {
-        implicitWidth: root.implicitWidth
-        implicitHeight: root.implicitHeight
+        anchors.fill: parent
         radius: 4
         border.color: AppColors.borderDark
         border.width: 1

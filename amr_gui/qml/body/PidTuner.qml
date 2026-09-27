@@ -11,28 +11,28 @@ GridLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
         wheelName: "Front Left (Wheel 0)"
-        model: PidCtrl.wheelFL
-        onApplyPid: (p, i, d) => PidCtrl.updateGains(0, p, i, d)
+        model: PidController.wheelFL
+        onApplyPid: (p, i, d) => PidController.updateGains(0, p, i, d)
     }
     WheelPlot {
         Layout.fillWidth: true
         Layout.fillHeight: true
         wheelName: "Front Right (Wheel 1)"
-        model: PidCtrl.wheelFR
-        onApplyPid: (p, i, d) => PidCtrl.updateGains(1, p, i, d)
+        model: PidController.wheelFR
+        onApplyPid: (p, i, d) => PidController.updateGains(1, p, i, d)
     }
     WheelPlot {
         Layout.fillWidth: true
         Layout.fillHeight: true
         wheelName: "Rear Left (Wheel 2)"
-        model: PidCtrl.wheelRL
-        onApplyPid: (p, i, d) => PidCtrl.updateGains(2, p, i, d)
+        model: PidController.wheelRL
+        onApplyPid: (p, i, d) => PidController.updateGains(2, p, i, d)
     }
     WheelPlot {
         Layout.fillWidth: true
         Layout.fillHeight: true
         wheelName: "Rear Right (Wheel 3)"
-        model: PidCtrl.wheelRR
-        onApplyPid: (p, i, d) => PidCtrl.updateGains(3, p, i, d)
+        model: PidController.wheelRR
+        onApplyPid: (p, i, d) => PidController.updateGains(3, p, i, d)
     }
 }

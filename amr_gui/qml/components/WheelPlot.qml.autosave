@@ -114,7 +114,7 @@ Rectangle {
                         }
 
                         var x = marginLeft + ((i / Math.max(count - 1, 1)) * plotW);
-                        // Map speed directly into plotting height
+                        //   Map speed directly into plotting height
                         var normalizedY = val / plotCanvas.maxSpeed; // [-1.0, 1.0]
                         var y = zeroY - (normalizedY * (plotH / 2.0));
 

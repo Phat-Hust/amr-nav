@@ -6,7 +6,7 @@ import "components"
 
 Rectangle {
     id: footerRoot
-    height: 48
+    height: 60
     color: AppColors.backgroundDark
     border.color: AppColors.borderDark
     border.width: 1

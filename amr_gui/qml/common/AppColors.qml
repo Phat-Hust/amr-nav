@@ -15,8 +15,9 @@ QtObject {
     readonly property color textBlack:       "#1C1C1E"  // High-contrast primary text for light mode
     readonly property color textDimmedLight: "#6E6E73"
     readonly property color green:           "#00ff00"
-    readonly property color darkGreen:       "#00ff00"
+    readonly property color darkGreen:       "#008000"
     readonly property color white:           "#ffffff"
+    readonly property color black:           "#1C1C1E"
     readonly property color antiqueWhite:    "#faebd7"
     readonly property color deepSkyBlue:     "#00bfff"
 

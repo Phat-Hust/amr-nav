@@ -2,6 +2,7 @@
 #pragma once
 #include <QObject>
 #include <QList>
+#include <QDebug>
 #include <QPointF>
 #include "../common/defines.h"
 
