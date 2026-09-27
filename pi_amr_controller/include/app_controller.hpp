@@ -34,10 +34,12 @@ public:
 private:
     void initSerial();
     void cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg);
-    void pidCallback(const geometry_msgs::msg::Vector3::SharedPtr msg);
+    void pidCallback(const amr_common::msg::WheelTelemetry::SharedPtr msg);
     
     void sendTargetVelocity(const double &vx, const double &vy, const double &wz);
-    void sendPidParameters(double kp, double ki, double kd);
+    void sendWheelPidParameters(const std::array<double, 4>& kp,
+                             const std::array<double, 4>& ki,
+                             const std::array<double, 4>& kd);
     void processSerialData(); // Hàm bóc tách dữ liệu linh hoạt (vận tốc & PID)
     
     void updateLoop();
@@ -71,7 +73,7 @@ private:
     // rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr get_pid_pub_;
 
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
-    rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr pid_sub_; 
+    rclcpp::Subscription<amr_common::msg::WheelTelemetry>::SharedPtr pid_sub_;
     
     std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
     rclcpp::TimerBase::SharedPtr timer_;

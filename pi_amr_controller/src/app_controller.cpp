@@ -26,8 +26,8 @@ PiAmrController::PiAmrController(const rclcpp::NodeOptions & options)
         "/cmd_vel", 10,
         std::bind(&PiAmrController::cmdVelCallback, this, std::placeholders::_1));
 
-    pid_sub_ = this->create_subscription<geometry_msgs::msg::Vector3>(
-        "/gui/set_pid", 10,
+    pid_sub_ = this->create_subscription<amr_common::msg::WheelTelemetry>(
+        "/set_wheel_pid", 10,
         std::bind(&PiAmrController::pidCallback, this, std::placeholders::_1));
 
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
@@ -111,12 +111,28 @@ void PiAmrController::cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr 
     sendTargetVelocity(target_vx_, target_vy_, target_wz_);
 }
 
-void PiAmrController::pidCallback(const geometry_msgs::msg::Vector3::SharedPtr msg)
+void PiAmrController::pidCallback(const amr_common::msg::WheelTelemetry::SharedPtr msg)
 {
-    sendPidParameters(msg->x, msg->y, msg->z);
-    RCLCPP_INFO(this->get_logger(), "Sent PID to STM32: Kp=%.3f, Ki=%.3f, Kd=%.3f", msg->x, msg->y, msg->z);
-}
+    std::array<double, 4> kp, ki, kd;
+    for (int i = 0; i < 4; ++i) {
+        kp[i] = msg->kp[i];
+        ki[i] = msg->ki[i];
+        kd[i] = msg->kd[i];
+    }
 
+    sendWheelPidParameters(kp, ki, kd);
+
+    RCLCPP_INFO(this->get_logger(),
+        "Sent 4-wheel PID to STM32:\n"
+        "  W0: Kp=%.3f, Ki=%.3f, Kd=%.3f\n"
+        "  W1: Kp=%.3f, Ki=%.3f, Kd=%.3f\n"
+        "  W2: Kp=%.3f, Ki=%.3f, Kd=%.3f\n"
+        "  W3: Kp=%.3f, Ki=%.3f, Kd=%.3f",
+        kp[0], ki[0], kd[0],
+        kp[1], ki[1], kd[1],
+        kp[2], ki[2], kd[2],
+        kp[3], ki[3], kd[3]);
+}
 void PiAmrController::sendTargetVelocity(const double &vx, const double &vy, const double &wz)
 {
     if (serial_fd_ == -1) return;
@@ -140,25 +156,43 @@ void PiAmrController::sendTargetVelocity(const double &vx, const double &vy, con
     write(serial_fd_, frame, sizeof(frame));
 }
 
-void PiAmrController::sendPidParameters(double kp, double ki, double kd)
+void PiAmrController::sendWheelPidParameters(const std::array<double, 4>& kp,
+                                             const std::array<double, 4>& ki,
+                                             const std::array<double, 4>& kd)
 {
     if (serial_fd_ == -1) return;
 
-    int16_t kp_int = static_cast<int16_t>(kp * 1000.0);
-    int16_t ki_int = static_cast<int16_t>(ki * 1000.0);
-    int16_t kd_int = static_cast<int16_t>(kd * 1000.0);
+    //Byte 0:     0xAA
+    //Byte 1:     0x55
+    //Byte 2:     0x02 (CMD: Set PID 4 Wheels)
+    //Byte 3-8:   Wheel 0 (Kp_H, Kp_L, Ki_H, Ki_L, Kd_H, Kd_L)
+    //Byte 9-14:  Wheel 1 (Kp_H, Kp_L, Ki_H, Ki_L, Kd_H, Kd_L)
+    //Byte 15-20: Wheel 2 (Kp_H, Kp_L, Ki_H, Ki_L, Kd_H, Kd_L)
+    //Byte 21-26: Wheel 3 (Kp_H, Kp_L, Ki_H, Ki_L, Kd_H, Kd_L)
+    //Byte 27:    CRC-8 (XOR sum of bytes 0 to 26)
 
-    uint8_t frame[10];
+    // Frame (28 bytes)
+    uint8_t frame[28];
     frame[0] = 0xAA;
     frame[1] = 0x55;
-    frame[2] = 0x02;
-    frame[3] = (kp_int >> 8) & 0xFF;
-    frame[4] = kp_int & 0xFF;
-    frame[5] = (ki_int >> 8) & 0xFF;
-    frame[6] = ki_int & 0xFF;
-    frame[7] = (kd_int >> 8) & 0xFF;
-    frame[8] = kd_int & 0xFF;
-    frame[9] = calculateCRC(frame, 9);
+    frame[2] = 0x02; // CMD 0x02: Set PID 4 wheels
+
+    int byte_idx = 3;
+    for (int i = 0; i < 4; ++i) {
+        int16_t kp_int = static_cast<int16_t>(kp[i] * 1000.0);
+        int16_t ki_int = static_cast<int16_t>(ki[i] * 1000.0);
+        int16_t kd_int = static_cast<int16_t>(kd[i] * 1000.0);
+
+        frame[byte_idx++] = (kp_int >> 8) & 0xFF;
+        frame[byte_idx++] = kp_int & 0xFF;
+        frame[byte_idx++] = (ki_int >> 8) & 0xFF;
+        frame[byte_idx++] = ki_int & 0xFF;
+        frame[byte_idx++] = (kd_int >> 8) & 0xFF;
+        frame[byte_idx++] = kd_int & 0xFF;
+    }
+
+    // Byte 27 is the XOR CRC of the first 27 bytes (indices 0 to 26)
+    frame[27] = calculateCRC(frame, 27);
 
     write(serial_fd_, frame, sizeof(frame));
 }
