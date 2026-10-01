@@ -7,6 +7,7 @@
 
 class RosManager : public QObject {
     Q_OBJECT
+
 public:
     static RosManager& instance();
 
@@ -18,7 +19,7 @@ public:
     void publishPidGains(const amr_common::msg::WheelTelemetry& msg);
 
 signals:
-    void telemetryUpdated(const amr_common::msg::WheelTelemetry::SharedPtr msg);
+    void handleWheelTelemetry(const amr_common::msg::WheelTelemetry msg);
 
 private:
     explicit RosManager(QObject* parent = nullptr);

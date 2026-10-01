@@ -5,6 +5,8 @@ import "../common"
 
 Rectangle {
     id: root
+
+    property int wheelIndex: 0
     property string wheelName: ""
     property var model: null
     signal applyPid(double kp, double ki, double kd)
@@ -12,6 +14,33 @@ Rectangle {
     border.color: "#3d3d3d"
     border.width: 1
     color: AppColors.white
+
+    // Helper function to extract telemetry values and set the SpinBoxes
+    function syncFromTelemetry() {
+        var idx = root.wheelIndex.toString()
+        var p = PidController.setWheelTelemetry["kp_" + idx]
+        var i = PidController.setWheelTelemetry["ki_" + idx]
+        var d = PidController.setWheelTelemetry["kd_" + idx]
+
+        if (p !== undefined && p !== null) kpBox.value = Math.round(p * 100.0)
+        if (i !== undefined && i !== null) kiBox.value = Math.round(i * 100.0)
+        if (d !== undefined && d !== null) kdBox.value = Math.round(d * 100.0)
+    }
+
+    // 1. Listen for the initial/manual sync signal from C++
+    Connections {
+        target: PidController
+        function onInitialGainsLoaded() {
+            root.syncFromTelemetry()
+        }
+    }
+
+    // 2. If ROS data arrived before this QML page loaded, populate immediately
+    Component.onCompleted: {
+        if (PidController.isInitialized) {
+            root.syncFromTelemetry()
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -30,10 +59,8 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            // Maximum speed scale (±1.0 m/s)
             property double maxSpeed: 1.0
 
-            // Margin paddings so axis ticks & labels don't get clipped
             readonly property real marginLeft: 60
             readonly property real marginRight: 15
             readonly property real marginTop: 15
@@ -54,21 +81,17 @@ Rectangle {
                 var plotH = height - marginTop - marginBottom;
                 var zeroY = marginTop + (plotH / 2.0);
 
-                // -------------------------------------------------------------
-                // 1. Draw Grid Lines & Y-Axis Velocity Labels
-                // -------------------------------------------------------------
+                // 1. Grid Lines & Labels
                 ctx.font = "10px monospace";
                 ctx.textAlign = "right";
                 ctx.textBaseline = "middle";
 
-                // Ticks for +1.5, +1.0, +0.5, 0.0, -0.5, -1.0, -1.5 m/s
                 var numDivisions = 6;
                 for (var step = 0; step <= numDivisions; ++step) {
-                    var ratio = step / numDivisions; // 0.0 to 1.0 (top to bottom)
+                    var ratio = step / numDivisions;
                     var curY = marginTop + (ratio * plotH);
                     var speedVal = maxSpeed - (ratio * (2.0 * maxSpeed));
 
-                    // Grid lines
                     ctx.strokeStyle = (Math.abs(speedVal) < 0.01) ? "#555555" : "#222222";
                     ctx.lineWidth = (Math.abs(speedVal) < 0.01) ? 1.5 : 1.0;
                     ctx.beginPath();
@@ -76,28 +99,21 @@ Rectangle {
                     ctx.lineTo(width - marginRight, curY);
                     ctx.stroke();
 
-                    // Y-axis label text
                     ctx.fillStyle = (Math.abs(speedVal) < 0.01) ? "#FFFFFF" : "#777777";
                     ctx.fillText(speedVal.toFixed(1) + " m/s", marginLeft - 6, curY);
                 }
 
-                // -------------------------------------------------------------
-                // 2. Draw Main Axis Lines (X & Y bounding borders)
-                // -------------------------------------------------------------
+                // 2. Axes
                 ctx.strokeStyle = AppColors.black;
                 ctx.lineWidth = 1;
                 ctx.beginPath();
-                // Y-axis line
                 ctx.moveTo(marginLeft, marginTop);
                 ctx.lineTo(marginLeft, height - marginBottom);
-                // Bottom X-axis baseline
                 ctx.moveTo(marginLeft, height - marginBottom);
                 ctx.lineTo(width - marginRight, height - marginBottom);
                 ctx.stroke();
 
-                // -------------------------------------------------------------
-                // 3. Draw Plot Data (Target & Current)
-                // -------------------------------------------------------------
+                // 3. Sliding lines
                 function drawSlidingLine(points, strokeColor) {
                     if (!points || points.length < 2) return;
 
@@ -114,8 +130,7 @@ Rectangle {
                         }
 
                         var x = marginLeft + ((i / Math.max(count - 1, 1)) * plotW);
-                        // Map speed directly into plotting height
-                        var normalizedY = val / plotCanvas.maxSpeed; // [-1.0, 1.0]
+                        var normalizedY = val / plotCanvas.maxSpeed;
                         var y = zeroY - (normalizedY * (plotH / 2.0));
 
                         if (i === 0) {
@@ -128,15 +143,11 @@ Rectangle {
                 }
 
                 if (root.model) {
-                    // Target Velocity line
                     drawSlidingLine(root.model.targetPoints, AppColors.accentRed);
-                    // Current Feedback line
                     drawSlidingLine(root.model.currentPoints, AppColors.deepSkyBlue);
                 }
 
-                // -------------------------------------------------------------
-                // 4. Compact Legend (Top-Right)
-                // -------------------------------------------------------------
+                // 4. Legend
                 var legX = width - marginRight - 160;
                 var legY = marginTop + 10;
 
@@ -153,7 +164,6 @@ Rectangle {
                 ctx.font = "bold 11px sans-serif";
                 ctx.fillText("Target", legX + 22, legY);
 
-                // Current (Pink)
                 ctx.strokeStyle = AppColors.deepSkyBlue;
                 ctx.beginPath();
                 ctx.moveTo(legX + 80, legY);
@@ -164,6 +174,7 @@ Rectangle {
             }
         }
 
+        // PID Controls
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 52
@@ -178,7 +189,7 @@ Rectangle {
                 anchors.rightMargin: 12
                 spacing: 10
 
-                // Kp input
+                // Kp
                 Text { text: "Kp:"; color: "#ffffff"; font.bold: true; font.pixelSize: 13 }
                 SpinBox {
                     id: kpBox
@@ -186,6 +197,8 @@ Rectangle {
                     editable: true
                     Layout.preferredWidth: 100
                     Layout.preferredHeight: 34
+                    textFromValue: function(value, locale) { return (value / 100.0).toFixed(2); }
+                    valueFromText: function(text, locale) { return Math.round(parseFloat(text) * 100); }
                     contentItem: TextInput {
                         text: kpBox.textFromValue(kpBox.value, kpBox.locale)
                         font: kpBox.font
@@ -195,7 +208,7 @@ Rectangle {
                         horizontalAlignment: Qt.AlignHCenter
                         verticalAlignment: Qt.AlignVCenter
                         readOnly: !kpBox.editable
-                        validator: kpBox.validator
+                        validator: DoubleValidator { bottom: 0.0; top: 100.0; decimals: 2 }
                         inputMethodHints: Qt.ImhFormattedNumbersOnly
                     }
                     background: Rectangle {
@@ -205,7 +218,7 @@ Rectangle {
                     }
                 }
 
-                // Ki input
+                // Ki
                 Text { text: "Ki:"; color: "#ffffff"; font.bold: true; font.pixelSize: 13 }
                 SpinBox {
                     id: kiBox
@@ -213,6 +226,8 @@ Rectangle {
                     editable: true
                     Layout.preferredWidth: 100
                     Layout.preferredHeight: 34
+                    textFromValue: function(value, locale) { return (value / 100.0).toFixed(2); }
+                    valueFromText: function(text, locale) { return Math.round(parseFloat(text) * 100); }
                     contentItem: TextInput {
                         text: kiBox.textFromValue(kiBox.value, kiBox.locale)
                         font: kiBox.font
@@ -222,7 +237,7 @@ Rectangle {
                         horizontalAlignment: Qt.AlignHCenter
                         verticalAlignment: Qt.AlignVCenter
                         readOnly: !kiBox.editable
-                        validator: kiBox.validator
+                        validator: DoubleValidator { bottom: 0.0; top: 100.0; decimals: 2 }
                         inputMethodHints: Qt.ImhFormattedNumbersOnly
                     }
                     background: Rectangle {
@@ -232,7 +247,7 @@ Rectangle {
                     }
                 }
 
-                // Kd input
+                // Kd
                 Text { text: "Kd:"; color: "#ffffff"; font.bold: true; font.pixelSize: 13 }
                 SpinBox {
                     id: kdBox
@@ -240,6 +255,8 @@ Rectangle {
                     editable: true
                     Layout.preferredWidth: 100
                     Layout.preferredHeight: 34
+                    textFromValue: function(value, locale) { return (value / 100.0).toFixed(2); }
+                    valueFromText: function(text, locale) { return Math.round(parseFloat(text) * 100); }
                     contentItem: TextInput {
                         text: kdBox.textFromValue(kdBox.value, kdBox.locale)
                         font: kdBox.font
@@ -249,7 +266,7 @@ Rectangle {
                         horizontalAlignment: Qt.AlignHCenter
                         verticalAlignment: Qt.AlignVCenter
                         readOnly: !kdBox.editable
-                        validator: kdBox.validator
+                        validator: DoubleValidator { bottom: 0.0; top: 100.0; decimals: 2 }
                         inputMethodHints: Qt.ImhFormattedNumbersOnly
                     }
                     background: Rectangle {
@@ -259,7 +276,7 @@ Rectangle {
                     }
                 }
 
-                Item { Layout.fillWidth: true } // Khoảng trống giãn cách
+                Item { Layout.fillWidth: true }
 
                 Button {
                     id: updateBtn

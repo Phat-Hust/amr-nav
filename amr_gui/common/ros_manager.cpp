@@ -16,7 +16,9 @@ void RosManager::init(int argc, char *argv[]) {
     m_telemetrySub = m_node->create_subscription<amr_common::msg::WheelTelemetry>(
         amr::TOPIC_WHEEL_TELEMETRY.toStdString(), 10,
         [this](const amr_common::msg::WheelTelemetry::SharedPtr msg) {
-            emit telemetryUpdated(msg);
+            if (msg) {
+                emit handleWheelTelemetry(*msg);
+            }
         });
 
     m_pidPub = m_node->create_publisher<amr_common::msg::WheelTelemetry>(
@@ -35,6 +37,7 @@ void RosManager::publishPidGains(const amr_common::msg::WheelTelemetry& msg) {
         m_pidPub->publish(msg);
     }
 }
+
 
 void RosManager::shutdown() {
     rclcpp::shutdown();
