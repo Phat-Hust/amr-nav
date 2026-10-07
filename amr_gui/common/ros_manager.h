@@ -4,6 +4,8 @@
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
 #include "amr_common/msg/wheel_telemetry.hpp"
+#include <nav_msgs/msg/occupancy_grid.hpp>
+#include <sensor_msgs/msg/laser_scan.hpp>
 
 class RosManager : public QObject {
     Q_OBJECT

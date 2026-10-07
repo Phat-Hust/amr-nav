@@ -12,6 +12,9 @@ int main(int argc, char *argv[]) {
 
     // Register type
     qRegisterMetaType<amr_common::msg::WheelTelemetry>("amr_common::msg::WheelTelemetry");
+    qRegisterMetaType<nav_msgs::msg::OccupancyGrid>("nav_msgs::msg::OccupancyGrid");
+    qRegisterMetaType<sensor_msgs::msg::LaserScan>("sensor_msgs::msg::LaserScan");
+
     qmlRegisterUncreatableType<WheelDataModel>("WheelDataModel", 1, 0, "WheelDataModel",
             "WheelDataModel cannot be instantiated directly in QML");
     qmlRegisterType<MapView>("AmrGui", 1, 0, "MapView");
