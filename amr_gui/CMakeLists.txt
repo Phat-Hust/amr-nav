@@ -35,7 +35,11 @@ target_include_directories(amr_gui PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-ament_target_dependencies(amr_gui rclcpp amr_common)
+ament_target_dependencies(amr_gui
+    rclcpp
+    amr_common
+    nav_msgs
+    sensor_msgs)
 target_link_libraries(amr_gui Qt6::Core Qt6::Gui Qt6::Quick)
 
 install(TARGETS amr_gui DESTINATION lib/${PROJECT_NAME})
