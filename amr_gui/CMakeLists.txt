@@ -9,6 +9,8 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(amr_common REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 find_package(Qt6 REQUIRED COMPONENTS Quick Core Gui)
 
 qt_add_resources(RESOURCES_RCC qml.qrc)
@@ -25,6 +27,7 @@ add_executable(amr_gui
     controller/button_controller.cpp
     controller/button_controller.h
     ${RESOURCES_RCC}
+    model/map_view.h model/map_view.cpp
 )
 
 target_include_directories(amr_gui PUBLIC

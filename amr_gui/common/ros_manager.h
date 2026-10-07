@@ -19,7 +19,10 @@ public:
     void publishPidGains(const amr_common::msg::WheelTelemetry& msg);
 
 signals:
+    void handleRobotPose(double x, double y, double yaw);
     void handleWheelTelemetry(const amr_common::msg::WheelTelemetry msg);
+    void handleOccupancyGridMap(const nav_msgs::msg::OccupancyGrid &mapMsg);
+    void handleLaserScan(const sensor_msgs::msg::LaserScan &scanMsg);
 
 private:
     explicit RosManager(QObject* parent = nullptr);
