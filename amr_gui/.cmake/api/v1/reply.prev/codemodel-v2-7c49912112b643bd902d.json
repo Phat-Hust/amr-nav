@@ -1,0 +1,88 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-Debug-01be9ff93c15f9a37bb7.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.16"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "amr_gui",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "amr_gui::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-amr_gui-Debug-ab18b1b90aaae27a7391.json",
+					"name" : "amr_gui",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "amr_gui_autogen::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-amr_gui_autogen-Debug-4ed2694c28f74d5b597a.json",
+					"name" : "amr_gui_autogen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "amr_gui_uninstall::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-amr_gui_uninstall-Debug-f43b67479ba82ed699c8.json",
+					"name" : "amr_gui_uninstall",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "uninstall::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-uninstall-Debug-69403789c270a997e073.json",
+					"name" : "uninstall",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/media/phat-hust/dev1/.projects/teaching_robot/amr_ws/src/amr-navigation/amr_gui",
+		"source" : "/media/phat-hust/dev1/.projects/teaching_robot/amr_ws/src/amr-navigation/amr_gui"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 3
+	}
+}

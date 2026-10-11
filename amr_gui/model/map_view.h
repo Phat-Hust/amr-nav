@@ -11,6 +11,8 @@
 #include <cmath>
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
+
+#include "../common/ros_manager.h"
 class MapView : public QQuickPaintedItem
 {
     Q_OBJECT

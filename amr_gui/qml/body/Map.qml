@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Dialogs
+import AmrGui 1.0
 import "../common"
 import "../components"
 
@@ -9,6 +10,9 @@ Rectangle {
     id: mapPageRoot
     anchors.fill: parent
     color: AppColors.antiqueWhite
+    property string currentMapName: ""
+    property string currentMapFile: ""
+    property string loadedMapName: "No map loaded"
 
     RowLayout {
         anchors.fill: parent
@@ -26,58 +30,71 @@ Rectangle {
             border.width: 1
             clip: true
 
-//            MapViewItem {
-//                id: mapView
-//                anchors.fill: parent
+            MapView {
+                id: mapView
+                anchors.fill: parent
 
-//                MouseArea {
-//                    anchors.fill: parent
-//                    hoverEnabled: true
-//                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
 
-//                    property real lastX: 0
-//                    property real lastY: 0
+                    property real lastX: 0
+                    property real lastY: 0
 
-//                    onPressed: (mouse) => {
-//                        lastX = mouse.x
-//                        lastY = mouse.y
-//                    }
+                    onPressed: (mouse) => {
+                        lastX = mouse.x
+                        lastY = mouse.y
+                    }
 
-//                    onPositionChanged: (mouse) => {
-//                        if (pressedButtons & Qt.LeftButton) {
-//                            var dx = mouse.x - lastX
-//                            var dy = mouse.y - lastY
-//                            mapView.addPan(dx, dy)
-//                            lastX = mouse.x
-//                            lastY = mouse.y
-//                        }
-//                    }
+                    onPositionChanged: (mouse) => {
+                        if (pressedButtons & Qt.LeftButton) {
+                            var dx = mouse.x - lastX
+                            var dy = mouse.y - lastY
+                            mapView.addPan(dx, dy)
+                            lastX = mouse.x
+                            lastY = mouse.y
+                        }
+                    }
 
-//                    // Mouse wheel to zoom
-//                    onWheel: (wheel) => {
-//                        var factor = (wheel.angleDelta.y > 0) ? 1.15 : 0.85
-//                        mapView.zoomAt(factor, Qt.point(wheel.x, wheel.y))
-//                    }
-//                }
-//            }
+                    // Mouse wheel to zoom
+                    onWheel: (wheel) => {
+                        var factor = (wheel.angleDelta.y > 0) ? 1.15 : 0.85
+                        mapView.zoomAt(factor, Qt.point(wheel.x, wheel.y))
+                    }
+                }
+            }
+            Text {
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.margins: 12
+                text: "Map: " + mapPageRoot.loadedMapName
+                color: AppColors.textWhite
+                font.pixelSize: 12
+                font.bold: true
+            }
 
             // Quick reset zoom/pan overlay button
             CustomButton {
+                id: resetViewBtn
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 anchors.margins: 12
                 text: "Reset View"
+                textColor: AppColors.black
+                hoverColor: AppColors.white
                 Layout.preferredWidth: 90
                 Layout.preferredHeight: 30
                 textPixelSize: 11
                 onClicked: mapView.resetView()
             }
+
         }
 
         // RIGHT COLUMN: Management Panel & Dynamic Pose Readout
         Rectangle {
             id: controlPanel
-            Layout.preferredWidth: 320
+            Layout.preferredWidth: 280
             Layout.fillHeight: true
             color: AppColors.backgroundLight
             radius: 8
@@ -90,8 +107,8 @@ Rectangle {
                 spacing: 16
 
                 Text {
-                    text: "Map & Navigation"
-                    color: "#ffffff"
+                    text: "Map Management"
+                    color: AppColors.textBlack
                     font.bold: true
                     font.pixelSize: 16
                 }
@@ -179,15 +196,18 @@ Rectangle {
 
     FileDialog {
         id: mapFileDialog
-        title: "Select Map File (.yaml / .pbstream)"
-        nameFilters: ["Map files (*.yaml *.pbstream)", "All files (*)"]
+        title: "Select Map File (.yaml)"
+        nameFilters: ["Map files (*.yaml)", "All files (*)"]
 
         onAccepted: {
-            // In Qt 6, selectedFile returns a QUrl directly
-            var path = mapFileDialog.selectedFile.toString().replace(/^(file:\/{2})/,"");
-            var filename = path.substring(path.lastIndexOf('/') + 1);
-            mapPageRoot.currentMapName = filename;
-            console.log("Loading selected map from:", path);
+            var rawPath = mapFileDialog.selectedFile.toString();
+            var cleanPath = rawPath.replace(/^(file:\/{2})/,"");
+
+            var filename = cleanPath.substring(cleanPath.lastIndexOf('/') + 1);
+            mapPageRoot.loadedMapName = filename;
+
+            // Calls C++ parser to load .pgm and emit OccupancyGrid
+            RosManager.loadMap(cleanPath);
         }
     }
 }

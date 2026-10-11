@@ -11,6 +11,7 @@ find_package(amr_common REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(cartographer_ros_msgs REQUIRED)
 find_package(Qt6 REQUIRED COMPONENTS Quick Core Gui)
 
 qt_add_resources(RESOURCES_RCC qml.qrc)
@@ -39,7 +40,8 @@ ament_target_dependencies(amr_gui
     rclcpp
     amr_common
     nav_msgs
-    sensor_msgs)
+    sensor_msgs
+    cartographer_ros_msgs)
 target_link_libraries(amr_gui Qt6::Core Qt6::Gui Qt6::Quick)
 
 install(TARGETS amr_gui DESTINATION lib/${PROJECT_NAME})

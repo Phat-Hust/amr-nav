@@ -5,9 +5,11 @@ namespace amr {
     constexpr int NUM_WHEELS = 4;
     constexpr int MAX_BUFFER_POINTS = 200;
 
-    const QString TOPIC_WHEEL_TELEMETRY = "/wheel_telemetry";
-    const QString TOPIC_SET_PID         = "/set_wheel_pid";
-    const QString TOPIC_EMERGENCY_BUTTON = "/emergency_btn";
+    const QString TOPIC_WHEEL_TELEMETRY     = "/wheel_telemetry";
+    const QString TOPIC_SET_PID             = "/set_wheel_pid";
+    const QString TOPIC_EMERGENCY_BUTTON    = "/emergency_btn";
+    const QString TOPIC_MAP                 = "/map";
+    const QString TOPIC_SCAN                = "/scan";
 
     enum WheelIndex {
         FRONT_LEFT  = 0,

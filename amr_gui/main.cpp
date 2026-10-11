@@ -26,9 +26,9 @@ int main(int argc, char *argv[]) {
     // Define signals and slots
     QObject::connect(&RosManager::instance(), &RosManager::handleWheelTelemetry,
                      &pidController, &PidController::updateWheelTelemetry);
-    QObject::connect(&RosManager::instance(), &RosManager::handleOccupancyGridMap,
+    QObject::connect(&RosManager::instance(), &RosManager::occupancyGridReceived,
                      &mapView, &MapView::updateOccupancyGrid);
-    QObject::connect(&RosManager::instance(), &RosManager::handleLaserScan,
+    QObject::connect(&RosManager::instance(), &RosManager::laserScanReceived,
                      &mapView, &MapView::updateLaserScan);
     QObject::connect(&RosManager::instance(), &RosManager::handleRobotPose,
                      &mapView, &MapView::updateRobotPose);
@@ -42,6 +42,8 @@ int main(int argc, char *argv[]) {
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("PidController", &pidController);
+    engine.rootContext()->setContextProperty("MapView", &mapView);
+    engine.rootContext()->setContextProperty("RosManager", &RosManager::instance());
     engine.load(QUrl(QStringLiteral("qrc:/qml/main.qml")));
 
     if (engine.rootObjects().isEmpty())

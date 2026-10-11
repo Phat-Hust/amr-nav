@@ -3,6 +3,15 @@
 MapView::MapView(QQuickItem *parent) : QQuickPaintedItem(parent)  {
     setAntialiasing(true);
     setAcceptedMouseButtons(Qt::AllButtons);
+    connect(&RosManager::instance(), &RosManager::occupancyGridReceived,
+            this, &MapView::updateOccupancyGrid);
+
+    connect(&RosManager::instance(), &RosManager::laserScanReceived,
+            this, &MapView::updateLaserScan);
+
+    connect(&RosManager::instance(), &RosManager::handleRobotPose,
+            this, &MapView::updateRobotPose);
+
 }
 
 // Getters
@@ -65,7 +74,22 @@ void MapView::zoomAt(qreal factor, const QPointF &center) {
 
 void MapView::resetView() {
     m_zoom = 1.0;
-    m_pan = QPointF(0.0, 0.0);
+
+    if (m_resolution > 0.0 && m_mapWidth > 0 && m_mapHeight > 0) {
+        // 1. Calculate map pixel location for world origin (0.0, 0.0)
+        QPointF worldOriginPixel = worldToMapPixel(0.0, 0.0);
+
+        // 2. Pan to center world origin (0,0) in the middle of the QML MapView viewport
+        qreal centerX = width() / 2.0;
+        qreal centerY = height() / 2.0;
+
+        m_pan = QPointF(centerX - worldOriginPixel.x() * m_zoom,
+                        centerY - worldOriginPixel.y() * m_zoom);
+    } else {
+        // Fallback if no map is loaded yet
+        m_pan = QPointF(0.0, 0.0);
+    }
+
     emit zoomChanged();
     emit panChanged();
     update();
@@ -81,25 +105,25 @@ void MapView::updateOccupancyGrid(const nav_msgs::msg::OccupancyGrid &mapMsg) {
     m_mapHeight  = mapMsg.info.height;
 
     if (m_mapWidth <= 0 || m_mapHeight <= 0) {
-        qDebug() << "Failed to load occupancy grid map due to unconsist map (width or height is zero)";
+        qDebug() << "[MapView] Invalid map dimensions:" << m_mapWidth << "x" << m_mapHeight;
         return;
     }
 
     QImage img(m_mapWidth, m_mapHeight, QImage::Format_RGBA8888);
 
     for (int y = 0; y < m_mapHeight; ++y) {
-        // ROS grid has (0,0) at bottom-left; QImage has (0,0) at top-left
+        // ROS grid origin is bottom-left; QImage is top-left
         uchar *scanline = img.scanLine(m_mapHeight - 1 - y);
 
         for (int x = 0; x < m_mapWidth; ++x) {
             int8_t cell = mapMsg.data[y * m_mapWidth + x];
             uchar r, g, b, a;
 
-            if (cell == -1) {        // Unknown space -> Dark gray
+            if (cell == -1) {        // Unknown space -> Dark Gray
                 r = 45;  g = 45;  b = 45;  a = 255;
-            } else if (cell == 0) {  // Free navigable space -> Light white/gray
-                r = 230; g = 230; b = 230; a = 255;
-            } else {                 // Occupied / Wall (1 to 100) -> Solid Dark
+            } else if (cell == 0) {  // Free space -> Light Gray
+                r = 255; g = 255; b = 255; a = 255;
+            } else {                 // Occupied wall -> Black / Dark
                 uchar val = static_cast<uchar>(230 - (cell * 200 / 100));
                 r = val; g = val; b = val; a = 255;
             }
@@ -112,6 +136,13 @@ void MapView::updateOccupancyGrid(const nav_msgs::msg::OccupancyGrid &mapMsg) {
     }
 
     m_mapImage = img;
+
+    // Center view if initializing for the first time or pan is default
+    if (m_pan.x() == 0.0 && m_pan.y() == 0.0) {
+        m_pan = QPointF(width() / 2.0 - (m_mapWidth / 2.0), height() / 2.0 - (m_mapHeight / 2.0));
+    }
+
+    qDebug() << "[MapView] Occupancy grid image updated (" << m_mapWidth << "x" << m_mapHeight << ")";
     update();
 }
 
@@ -169,45 +200,55 @@ QPointF MapView::worldToMapPixel(double wx, double wy) const {
 void MapView::paint(QPainter *painter) {
     QMutexLocker locker(&m_mutex);
 
+    // Fill dark background behind viewport
+    painter->fillRect(boundingRect(), QColor("#ffffff"));
+
+    if (m_mapImage.isNull()) {
+        // Draw centered hint text when no map is loaded
+        painter->setPen(QColor(120, 120, 120));
+        painter->drawText(boundingRect(), Qt::AlignCenter, "No Map Loaded\nSelect a .yaml or start SLAM");
+        return;
+    }
+
     painter->save();
+
+    // Apply pan and zoom transforms
     painter->translate(m_pan);
     painter->scale(m_zoom, m_zoom);
 
-    // Reder occupancy grid map
-    if (!m_mapImage.isNull()) {
-        painter->setRenderHint(QPainter::SmoothPixmapTransform, false);
-        painter->drawImage(0, 0, m_mapImage);
-    }
+    // 1. Render occupancy grid image (Pixel coordinates [0, 0] to [m_mapWidth, m_mapHeight])
+    painter->setRenderHint(QPainter::SmoothPixmapTransform, false);
+    painter->drawImage(0, 0, m_mapImage);
 
-    // Render laser scan points
+    // 2. Render laser scan points
     if (!m_laserPoints.isEmpty()) {
         painter->setRenderHint(QPainter::Antialiasing, true);
         painter->setPen(Qt::NoPen);
         painter->setBrush(QColor(255, 30, 30, 220)); // Bright Red
 
-        qreal pointRadius = 2.0 / m_zoom; // Constant screen-pixel size
+        qreal pointRadius = 2.0 / m_zoom; // Fixed screen-pixel size
         for (const QPointF &worldPt : m_laserPoints) {
             QPointF mapPt = worldToMapPixel(worldPt.x(), worldPt.y());
             painter->drawEllipse(mapPt, pointRadius, pointRadius);
         }
     }
 
+    // 3. Render Robot Footprint & Heading
     if (m_mapWidth > 0 && m_mapHeight > 0) {
         QPointF robotMapPt = worldToMapPixel(m_robotPose.x(), m_robotPose.y());
 
         painter->save();
         painter->translate(robotMapPt);
-        // Note: invert rotation angle because the Y-axis is inverted
-        painter->rotate(-m_robotYaw * (180.0 / M_PI));
+        painter->rotate(-m_robotYaw * (180.0 / M_PI)); // Invert Y-axis rotation
 
         qreal radius = 8.0 / m_zoom;
 
-        // Draw footprint body
+        // Footprint body
         painter->setPen(QPen(QColor(0, 229, 255), 2.0 / m_zoom));
         painter->setBrush(QColor(0, 229, 255, 100));
         painter->drawEllipse(QPointF(0, 0), radius, radius);
 
-        // Draw heading arrow pointing along +X
+        // Direction arrow
         painter->setPen(QPen(QColor(255, 235, 59), 2.5 / m_zoom));
         painter->drawLine(QPointF(0, 0), QPointF(radius * 1.6, 0));
 
@@ -216,5 +257,4 @@ void MapView::paint(QPainter *painter) {
 
     painter->restore();
 }
-
 
