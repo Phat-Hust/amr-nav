@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 
 import os
-from ament_index_python.packages import get_package_prefix
+import tempfile
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction
+from launch.actions import (
+    DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler, SetLaunchConfiguration,
+)
+from launch.event_handlers import OnShutdown
 from launch.conditions import IfCondition
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -12,29 +15,34 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def process_ros2_controllers_config(context):
+    if LaunchConfiguration('use_gazebo').perform(context) != 'true':
+        return []
     prefix = LaunchConfiguration('prefix').perform(context)
     enable_odom_tf = LaunchConfiguration('enable_odom_tf').perform(context)
+    template_path = LaunchConfiguration('controllers_template').perform(context)
+    with open(template_path, 'r', encoding='utf-8') as file:
+        template_content = file.read()
+    processed_content = template_content.replace('${prefix}', prefix)
+    processed_content = processed_content.replace(
+        'enable_odom_tf: true', f'enable_odom_tf: {enable_odom_tf}'
+    )
 
-    # Dynamically locate source directory from install prefix
-    ws_dir = os.path.abspath(os.path.join(get_package_prefix('amr_simulation'), '..', '..'))
-    src_config_dir = os.path.join(ws_dir, 'src', 'amr_simulation', 'config', 'mecanum')
-    template_path = os.path.join(src_config_dir, 'ros2_controllers_template.yaml')
+    # Resolve launch-specific substitutions without changing the installed configuration.
+    with tempfile.NamedTemporaryFile(
+        mode='w', prefix='amr_controllers_', suffix='.yaml', encoding='utf-8', delete=False
+    ) as file:
+        file.write(processed_content)
+        output_path = file.name
 
-    if os.path.exists(template_path):
-        with open(template_path, 'r', encoding='utf-8') as file:
-            template_content = file.read()
+    def cleanup(context, *args, **kwargs):
+        if os.path.exists(output_path):
+            os.unlink(output_path)
+        return []
 
-        processed_content = template_content.replace('${prefix}', prefix)
-        processed_content = processed_content.replace(
-            'enable_odom_tf: true', f'enable_odom_tf: {enable_odom_tf}'
-        )
-
-        os.makedirs(src_config_dir, exist_ok=True)
-        output_path = os.path.join(src_config_dir, 'ros2_controllers.yaml')
-        with open(output_path, 'w', encoding='utf-8') as file:
-            file.write(processed_content)
-
-    return []
+    return [
+        SetLaunchConfiguration('generated_controllers_file', output_path),
+        RegisterEventHandler(OnShutdown(on_shutdown=[OpaqueFunction(function=cleanup)])),
+    ]
 
 
 ARGUMENTS = [
@@ -72,8 +80,8 @@ def generate_launch_description():
 
     default_urdf_model_path = PathJoinSubstitution(
         [pkg_share_description, 'urdf', 'robots', urdf_filename])
-    default_rviz_config_path = PathJoinSubstitution(
-        [pkg_share_description, 'rviz', rviz_config_filename])
+    config_directory = os.environ.get('CONFIG_FOLDER', '/var/amr/config')
+    default_rviz_config_path = os.path.join(config_directory, rviz_config_filename)
 
     jsp_gui = LaunchConfiguration('jsp_gui')
     rviz_config_file = LaunchConfiguration('rviz_config_file')
@@ -98,7 +106,8 @@ def generate_launch_description():
         'xacro', ' ', urdf_model, ' ',
         'robot_name:=', LaunchConfiguration('robot_name'), ' ',
         'prefix:=', LaunchConfiguration('prefix'), ' ',
-        'use_gazebo:=', LaunchConfiguration('use_gazebo')
+        'use_gazebo:=', LaunchConfiguration('use_gazebo'), ' ',
+        'controllers_file:=', LaunchConfiguration('generated_controllers_file', default='')
     ]), value_type=str)
 
     start_robot_state_publisher_cmd = Node(
@@ -140,6 +149,11 @@ def generate_launch_description():
 
     ld = LaunchDescription(ARGUMENTS)
 
+    ld.add_action(DeclareLaunchArgument(
+        'controllers_template',
+        default_value=PathJoinSubstitution([
+            config_directory, LaunchConfiguration('robot_name'), 'ros2_controllers_template.yaml']),
+        description='Controller configuration template in CONFIG_FOLDER'))
     ld.add_action(OpaqueFunction(function=process_ros2_controllers_config))
     ld.add_action(declare_rviz_config_file_cmd)
     ld.add_action(declare_urdf_model_path_cmd)

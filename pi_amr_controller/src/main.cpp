@@ -1,8 +1,8 @@
 #include <memory>
+#include <cstdlib>
 #include <string>
 
 #include "rclcpp/rclcpp.hpp"
-#include "ament_index_cpp/get_package_share_directory.hpp"
 
 #include "pi_amr_controller/app_controller.hpp"
 
@@ -11,15 +11,12 @@ int main(int argc, char ** argv)
   // Khởi động ROS 2
   rclcpp::init(argc, argv);
 
-  // Tìm thư mục share của package pi_amr_controller
-  const std::string package_share =
-    ament_index_cpp::get_package_share_directory(
-      "pi_amr_controller"
-    );
+  const char * config_directory = std::getenv("CONFIG_FOLDER");
 
   // Tạo đường dẫn tới config.yaml
   const std::string config_file =
-    package_share + "/config/config.yaml";
+    std::string(config_directory ? config_directory : "/var/amr/config") +
+    "/pi_amr_controller.yaml";
 
   // Tạo NodeOptions
   rclcpp::NodeOptions options;

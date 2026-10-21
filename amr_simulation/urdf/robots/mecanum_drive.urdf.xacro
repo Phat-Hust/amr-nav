@@ -6,6 +6,7 @@
     <xacro:arg name="robot_name" default="mecanum"/>
     <xacro:arg name="prefix" default=""/>
     <xacro:arg name="use_gazebo" default="false"/>
+    <xacro:arg name="controllers_file" default="$(optenv CONFIG_FOLDER /var/amr/config)/mecanum/ros2_controllers.yaml"/>
 
     <!-- Changed rosmaster_x3_base to mecanum_base -->
     <xacro:include filename="$(find amr_simulation)/urdf/mech/mecanum_base.urdf.xacro"/>
@@ -75,6 +76,7 @@
     <xacro:include filename="$(find amr_simulation)/urdf/control/gazebo_sim_ros2_control.urdf.xacro" />
     <xacro:load_gazebo_sim_ros2_control_plugin
       robot_name="$(arg robot_name)"
+      controllers_file="$(arg controllers_file)"
       use_gazebo="$(arg use_gazebo)"/>
 
     <xacro:include filename="$(find amr_simulation)/urdf/control/mecanum_ros2_control.urdf.xacro" />

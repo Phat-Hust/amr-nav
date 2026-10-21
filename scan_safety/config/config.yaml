@@ -1,0 +1,19 @@
+scan_safety:
+  ros__parameters:
+    scan_topic: /scan
+    base_footprint_frame: base_footprint
+    base_link_frame: base_link
+    diagnostics_topic: /scan_safety/diagnostics
+
+    scan_timeout: 0.5       # Seconds without a fresh scan before ERROR.
+    transform_timeout: 0.05 # Seconds to wait for each TF lookup.
+    min_points: 1          # Scan hits required within a zone.
+
+    # Four corners in perimeter order, clockwise or counterclockwise.
+    # Flat list: [x1, y1, x2, y2, x3, y3, x4, y4], in meters.
+    # Coordinates use base_footprint_frame: +x forward, +y left.
+    warning_zone:
+      points: [-0.6, -0.45, 0.8, -0.45, 0.8, 0.45, -0.6, 0.45]
+    # Must lie completely inside warning_zone. ERROR takes priority.
+    error_zone:
+      points: [-0.3, -0.25, 0.4, -0.25, 0.4, 0.25, -0.3, 0.25]

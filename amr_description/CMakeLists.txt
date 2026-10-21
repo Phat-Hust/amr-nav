@@ -33,8 +33,9 @@ install(DIRECTORY launch urdf meshes
   DESTINATION share/${PROJECT_NAME}/
 )
 
-configure_file(urdf/amr_1lidar.urdf ${CMAKE_INSTALL_PREFIX}/../../rootfs/var/tvcamr/config/amr_1lidar.urdf COPYONLY)
-configure_file(urdf/amr_2lidar.urdf ${CMAKE_INSTALL_PREFIX}/../../rootfs/var/tvcamr/config/amr_2lidar.urdf COPYONLY)
+# Install robot-specific descriptions when supplied by this package.
+install(FILES urdf/amr_1lidar.urdf urdf/amr_2lidar.urdf
+  DESTINATION /var/amr/config OPTIONAL)
 
 ################################################################################
 # Macro for ament package

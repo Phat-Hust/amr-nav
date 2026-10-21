@@ -18,11 +18,6 @@ def launch_setup(context, *args, **kwargs):
 
     use_sim_time = use_sim_time_str in ('true', '1')
 
-    if not use_sim_time:
-        urdf_path = '/var/amr/config/amr_1lidar.urdf'
-    else:
-
-
     urdf_file_name = LaunchConfiguration('urdf_file_name', default='amr.urdf')
 
     urdf_path = urdf_file_name.perform(context=context)
@@ -52,7 +47,9 @@ def generate_launch_description():
             description='Use simulation (Gazebo) clock if true'),
         DeclareLaunchArgument(
             'urdf_file_name',
-            default_value='amr.urdf',
+            default_value=os.path.join(
+                os.environ.get('CONFIG_FOLDER', '/var/amr/config'),
+                'amr_' + os.environ.get('NUMBER_OF_SCANS', '1') + 'lidar.urdf'),
             description='Urdf file to be used'
         ),
 

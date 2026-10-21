@@ -48,6 +48,8 @@ install(
 
 
 
+install(DIRECTORY config/ DESTINATION /var/amr/config)
+
 ament_export_include_directories(include)
 ament_export_dependencies(
   rclcpp

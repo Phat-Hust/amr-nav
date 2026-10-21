@@ -28,7 +28,7 @@ def is_package_installed(package_name):
       return False
 
 def generate_launch_description():
-	use_sim_time = LaunchConfiguration('use_sim_time')
+    use_sim_time = LaunchConfiguration('use_sim_time')
     simulation_mode = LaunchConfiguration('simulation_mode')
     run_gazebo_client = LaunchConfiguration('run_gazebo_client')
     run_rviz = LaunchConfiguration('run_rviz')
@@ -47,74 +47,74 @@ def generate_launch_description():
     run_rviz_arg = DeclareLaunchArgument('run_rviz',
           default_value='false')
     param_file_arg = DeclareLaunchArgument('params_file',
-          default_value=os.path.join(CONFIG_FOLDER, 'tvc_bringup_params.yaml'),
+          default_value=os.path.join(CONFIG_FOLDER, 'amr_bringup_params.yaml'),
           description='')
 
     param_substitutions = {
-	    'use_sim_time': use_sim_time,
-	    'amr_loc_config_directory': CONFIG_FOLDER,
-	    'configuration_directory': CONFIG_FOLDER,
-	    'number_of_scans': NUMBER_OF_SCANS
-	}
+        'use_sim_time': use_sim_time,
+        'amr_loc_config_directory': CONFIG_FOLDER,
+        'configuration_directory': CONFIG_FOLDER,
+        'number_of_scans': NUMBER_OF_SCANS
+    }
 
-	configured_params = RewrittenYaml(
-	    source_file=params_file,
-	    root_key='',
-	    param_rewrites=param_substitutions,
-	    convert_types=True)
+    configured_params = RewrittenYaml(
+        source_file=params_file,
+        root_key='',
+        param_rewrites=param_substitutions,
+        convert_types=True)
 
-	# --------- ROBOT INFORMATION -------------------------------------------
-	simulation_nodes = GroupAction(
-	    condition=IfCondition(simulation_mode),
-	    actions=[
-	      # Simulation
-	      # The robot state publisher is run inside this launch file
-	      IncludeLaunchDescription(
-	        PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('amr_simulation'), 'launch', 'amr_gazebo.launch.py')),
-	        launch_arguments={'world_name':LaunchConfiguration('world_name', default='old_office'),
-	                          'run_gazebo_client':run_gazebo_client}.items(),
-	      ),
-	      IncludeLaunchDescription(
-	        PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('amr_simulation'), 'launch', 'robot_state_publisher.launch.py')),
-	        launch_arguments={'use_sim_time': 'false',
-	                          'urdf_file_name': os.path.join(CONFIG_FOLDER, 'amr_' + NUMBER_OF_SCANS + 'lidar.urdf')}.items()
-	      ),
-	    ]
-	  )
-	robot_hw_group = GroupAction(
-	    condition=UnlessCondition(simulation_mode),
-	    actions=[
-	      # Motor Driver
-	      # IncludeLaunchDescription(
-	      #   PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('pi_amr_controller'),'launch', 'pi_amr_controller.launch.py')),
-	      #   launch_arguments={'params_file': os.path.join(CONFIG_FOLDER, "pi_amr_controller.yaml"),
-	      #                     'use_sim_time': use_sim_time}.items()
-	      # ),
-	      # Lidar
-	      IncludeLaunchDescription(
-	        PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('amr_lidar'),'launch', 'amr_lidar.launch.py'))
-	      ),
-	      IncludeLaunchDescription(
-	        PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('amr_description'), 'launch', 'robot_state_publisher.launch.py')),
-	        launch_arguments={'use_sim_time': 'false',
-	                          'urdf_file_name': os.path.join(CONFIG_FOLDER, 'amr_' + NUMBER_OF_SCANS + 'lidar.urdf')}.items()
-	      ),
-	    ]
-	  )
+    # --------- ROBOT INFORMATION -------------------------------------------
+    simulation_nodes = GroupAction(
+        condition=IfCondition(simulation_mode),
+        actions=[
+          # Simulation
+          # The robot state publisher is run inside this launch file
+          IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('amr_simulation'), 'launch', 'amr_gazebo.launch.py')),
+            launch_arguments={'world_name':LaunchConfiguration('world_name', default='old_office'),
+                              'run_gazebo_client':run_gazebo_client}.items(),
+          ),
+          IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('amr_simulation'), 'launch', 'robot_state_publisher.launch.py')),
+            launch_arguments={'use_sim_time': 'false',
+                              'urdf_file_name': os.path.join(CONFIG_FOLDER, 'amr_' + NUMBER_OF_SCANS + 'lidar.urdf')}.items()
+          ),
+        ]
+      )
+    robot_hw_group = GroupAction(
+        condition=UnlessCondition(simulation_mode),
+        actions=[
+          # Motor Driver
+          # IncludeLaunchDescription(
+          #   PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('pi_amr_controller'),'launch', 'pi_amr_controller.launch.py')),
+          #   launch_arguments={'params_file': os.path.join(CONFIG_FOLDER, "pi_amr_controller.yaml"),
+          #                     'use_sim_time': use_sim_time}.items()
+          # ),
+          # Lidar
+          IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('amr_lidar_bringup'),'launch', 'lidar.launch.py'))
+          ),
+          IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('amr_description'), 'launch', 'robot_state_publisher.launch.py')),
+            launch_arguments={'use_sim_time': 'false',
+                              'urdf_file_name': os.path.join(CONFIG_FOLDER, 'amr_' + NUMBER_OF_SCANS + 'lidar.urdf')}.items()
+          ),
+        ]
+      )
 
-	rviz_node = GroupAction(
-	    condition=IfCondition(run_rviz),
-	    actions = [
-	      IncludeLaunchDescription(
-	        PythonLaunchDescriptionSource(
-	            os.path.join(get_package_share_directory('nav2_bringup'), 'launch', 'rviz_launch.py')),
-	        launch_arguments={'namespace': '',
-	                          'use_namespace': 'False',
-	                          'rviz_config': os.path.join(get_package_share_directory('amr_app_manager'), 'rviz','mecanum_amr.rviz')}.items())
-	    ]
-	  )
+    rviz_node = GroupAction(
+        condition=IfCondition(run_rviz),
+        actions = [
+          IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(get_package_share_directory('nav2_bringup'), 'launch', 'rviz_launch.py')),
+            launch_arguments={'namespace': '',
+                              'use_namespace': 'False',
+                              'rviz_config': os.path.join(CONFIG_FOLDER, 'mecanum_amr.rviz')}.items())
+        ]
+      )
 
-	ld = LaunchDescription()
+    ld = LaunchDescription()
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(simulation_mode_arg)
     # ld.add_action(sim_world_name)
