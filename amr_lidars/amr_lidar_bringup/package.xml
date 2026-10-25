@@ -13,10 +13,13 @@
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
 
-  <exec_depend>rplidar_ros</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <!-- Driver packages are selected at runtime and added separately. -->
   
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>python3-pytest</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

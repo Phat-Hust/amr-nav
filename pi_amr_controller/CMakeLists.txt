@@ -25,6 +25,8 @@ target_compile_features(pi_amr_controller PUBLIC c_std_99 cxx_std_17)  # Require
 
 install(TARGETS pi_amr_controller
   DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
+install(FILES config/config.yaml DESTINATION /var/amr/config RENAME pi_amr_controller.yaml)
 
 ament_target_dependencies(pi_amr_controller
   rclcpp

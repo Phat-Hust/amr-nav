@@ -276,7 +276,8 @@ void RosManager::requestStartMappingTrajectory() {
     }
 
     auto request = std::make_shared<cartographer_ros_msgs::srv::StartTrajectory::Request>();
-    request->configuration_directory = "/path/to/cartographer_config";
+    request->configuration_directory = qEnvironmentVariable(
+        "CONFIG_FOLDER", "/var/amr/config").toStdString();
     request->configuration_basename = "amr_mapping.lua";
     request->use_initial_pose = false;
 
@@ -307,7 +308,8 @@ void RosManager::requestStartLocalizationTrajectory() {
     }
 
     auto request = std::make_shared<cartographer_ros_msgs::srv::StartTrajectory::Request>();
-    request->configuration_directory = "/path/to/cartographer_config";
+    request->configuration_directory = qEnvironmentVariable(
+        "CONFIG_FOLDER", "/var/amr/config").toStdString();
     request->configuration_basename = "amr_localization.lua";
     request->use_initial_pose = false;
 

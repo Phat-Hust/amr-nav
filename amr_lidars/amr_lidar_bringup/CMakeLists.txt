@@ -21,11 +21,17 @@ if(BUILD_TESTING)
   # a copyright and license is added to all source files
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_lidar_selection test/test_lidar_selection.py
+    ENV
+      "PYTHONDONTWRITEBYTECODE=1"
+      "ROS_LOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/ros_logs")
 endif()
 
 install(
-  DIRECTORY launch
+  DIRECTORY launch config
   DESTINATION share/${PROJECT_NAME}
 )
+install(FILES config/config.yaml DESTINATION /var/amr/config RENAME amr_lidars.yaml)
 
 ament_package()

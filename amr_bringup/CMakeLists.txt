@@ -28,8 +28,14 @@ include_directories(include)
 
 # Install runtime assets matching your bringup/simulation structure
 install(
-  DIRECTORY launch config params rviz maps
+  DIRECTORY launch config
   DESTINATION share/${PROJECT_NAME}/
+)
+
+# System-wide environment configuration, sourced before launching the robot.
+install(
+  FILES config/amr_config.sh config/amr_bringup_params.yaml
+  DESTINATION /var/amr/config
 )
 
 # Export include directories (if applicable)

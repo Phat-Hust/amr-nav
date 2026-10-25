@@ -1,0 +1,28 @@
+# Installed as ${CONFIG_FOLDER}/amr_lidars.yaml.
+# Driver packages are optional: only the selected package is required at runtime.
+drivers:
+  ydlidar_x4:
+    package: ydlidar_ros2_driver
+    launch_file: launch/ydlidar_launch.py
+    launch_arguments:
+      # Supply the matching driver parameters when adding the driver source.
+      params_file: ${CONFIG_FOLDER}/ydlidar_x4.yaml
+
+  sick_tim571:
+    package: sick_scan_xd
+    launch_file: launch/sick_tim_5xx.launch.py
+    # Driver-specific configuration will be integrated when its source is added.
+    launch_arguments: {}
+
+  a2m8:
+    package: rplidar_ros
+    launch_file: launch/rplidar_a2m8_launch.py
+    launch_arguments: {}
+  a1:
+    package: rplidar_ros
+    launch_file: launch/rplidar_a1_launch.py
+    launch_arguments: {}
+  s2:
+    package: rplidar_ros
+    launch_file: launch/rplidar_s2_launch.py
+    launch_arguments: {}
