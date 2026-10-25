@@ -42,11 +42,11 @@
       x_reflect="-1"
       y_reflect="-1"/>
 
-    <xacro:rgbd_camera
+    <!-- <xacro:rgbd_camera
       prefix="$(arg prefix)"
       camera_name="cam_1"
       xyz_offset="0.105 0 0.05"
-      rpy_offset="0 -0.50 0"/>
+      rpy_offset="0 -0.50 0"/> -->
 
     <xacro:lidar_sensor
       prefix="$(arg prefix)"
@@ -70,7 +70,7 @@
     -->
 
     <xacro:include filename="$(find amr_simulation)/urdf/control/velocity_control_plugin.urdf.xacro" />
-    <xacro:load_velocity_control_plugin use_gazebo="$(arg use_gazebo)"/>
+    <!-- <xacro:load_velocity_control_plugin use_gazebo="$(arg use_gazebo)"/> -->
 
     <xacro:include filename="$(find amr_simulation)/urdf/control/gazebo_sim_ros2_control.urdf.xacro" />
     <xacro:load_gazebo_sim_ros2_control_plugin

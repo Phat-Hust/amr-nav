@@ -1,5 +1,17 @@
 <sdf version='1.7'>
   <world name='default'>
+    <plugin filename="ignition-gazebo-physics-system"
+        name="ignition::gazebo::systems::Physics"/>
+
+    <plugin filename="ignition-gazebo-user-commands-system"
+            name="ignition::gazebo::systems::UserCommands"/>
+
+    <plugin filename="ignition-gazebo-scene-broadcaster-system"
+            name="ignition::gazebo::systems::SceneBroadcaster"/>
+    <plugin filename="ignition-gazebo-sensors-system"
+            name="ignition::gazebo::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
     <light name='sun' type='directional'>
       <cast_shadows>1</cast_shadows>
       <pose>0 0 10 0 -0 0</pose>
@@ -54,10 +66,9 @@
             </plane>
           </geometry>
           <material>
-            <script>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-              <name>Gazebo/Grey</name>
-            </script>
+            <ambient>0.85 0.82 0.72 1</ambient>
+            <diffuse>0.95 0.92 0.82 1</diffuse>
+            <specular>0.05 0.05 0.05 1</specular>
           </material>
         </visual>
         <self_collide>0</self_collide>
@@ -74,9 +85,9 @@
       <real_time_update_rate>1000</real_time_update_rate>
     </physics>
     <scene>
-      <ambient>0.4 0.4 0.4 1</ambient>
-      <background>0.7 0.7 0.7 1</background>
-      <shadows>1</shadows>
+      <ambient>0.7 0.7 0.7 1</ambient>
+      <background>0.75 0.85 0.95 1</background>
+      <shadows>false</shadows>
     </scene>
     <audio>
       <device>default</device>
@@ -22974,6 +22985,7 @@
       <pose>6.36294 2.30772 0 0 -0 0</pose>
     </model>
     <model name='first_2015_trash_can'>
+      <static>true</static>
       <link name='link'>
         <inertial>
           <pose>0 0 0.3683 0 -0 0</pose>
