@@ -2,3 +2,13 @@
 build
 install
 log
+
+# CMake build build artifacts
+.cmake/
+CMakeCache.txt
+CMakeFiles/
+
+# Qt Creator settings & build directories
+.qtc/
+qtcsettings.cmake
+build-*/
